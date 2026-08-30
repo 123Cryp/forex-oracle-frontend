@@ -64,7 +64,7 @@ forgotten agreement can never be resolved against a rate with no
 relationship to the agreed moment). Once that window closes unresolved,
 anyone can permissionlessly call `expire_agreement`.
 
-### 3. Mandatory multi-source corroboration
+### 3. Mandatory multi-source corroboration with explicit quorum rules
 `required_source_domains` is **not optional** — every agreement must
 commit at least 2 distinct, reputable, allowlisted FX data domains
 (`xe.com`, `oanda.com`, `bloomberg.com`, `reuters.com`, and 12 others —
@@ -81,6 +81,15 @@ self-reported Above/Below/Equal comparison is cross-checked against a
 comparison computed deterministically in Python from the extracted rate —
 any disagreement excludes that source rather than trusting either answer
 blindly.
+
+#### Quorum & Dissenting Sources Rule
+- **2 sources (minimum):** Both must agree (both Above, both Below, or both Equal). 
+  If they disagree (one Above, one Below) → `Indeterminate`, no winner.
+- **3+ sources:** Majority vote wins. If 2 agree and 1 disagrees, the 1 is marked 
+  as `is_dissenting: true` in the evidence record but does not prevent consensus.
+- **Dissenting sources** are recorded in the full audit trail with 
+  `is_dissenting: true` so both parties can see which sources disagreed and 
+  potentially appeal or dispute the outcome offline based on methodology differences.
 
 ---
 

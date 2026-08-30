@@ -659,7 +659,9 @@ class ForexCrossRateOracle(gl.Contract):
     def _aggregate(self, records):
         """
         Deterministically combine per-source comparison results into
-        ONE final verdict. Only sources that are:
+        ONE final verdict, with explicit quorum and dissenting-source rules.
+        
+        Only sources that are:
           - successfully fetched ("ok" fetch_status),
           - NOT a duplicate domain of an earlier source,
           - on the reputable-domain allowlist, and
@@ -669,6 +671,12 @@ class ForexCrossRateOracle(gl.Contract):
             AND the model's self-reported COMPARISON agreed with the
             deterministic Python-computed one)
         count as "eligible" / independent evidence.
+        
+        QUORUM RULES:
+        - If independent_total < MIN_INDEPENDENT_SOURCES (2): return "Indeterminate"
+        - If exactly 2 sources and they disagree: return "Indeterminate"
+        - If 3+ sources: majority vote wins (strict >)
+        - Sources in the minority are marked with is_dissenting=true
         """
         eligible = [
             r
@@ -684,8 +692,38 @@ class ForexCrossRateOracle(gl.Contract):
         equal = sum(1 for r in eligible if r["comparison"] == "Equal")
         independent_total = len(eligible)
 
+        # Mark dissenting sources (in minority) before returning verdict
+        if independent_total >= self.MIN_INDEPENDENT_SOURCES:
+            # Determine majority vote
+            verdict_votes = {
+                "Above": above,
+                "Below": below,
+                "Equal": equal
+            }
+            majority_verdict = max(verdict_votes, key=verdict_votes.get)
+            majority_count = verdict_votes[majority_verdict]
+            
+            # Mark sources that disagree with majority as dissenting
+            for r in eligible:
+                if r["comparison"] != majority_verdict:
+                    r["is_dissenting"] = True
+                else:
+                    r["is_dissenting"] = False
+
+        # Quorum rule: must have at least MIN_INDEPENDENT_SOURCES
         if independent_total < self.MIN_INDEPENDENT_SOURCES:
             return "Indeterminate"
+        
+        # Quorum rule: if exactly 2 sources and they disagree, indeterminate
+        if independent_total == self.MIN_INDEPENDENT_SOURCES:
+            if above == 1 and below == 1 and equal == 0:
+                return "Indeterminate"
+            if above == 1 and equal == 1 and below == 0:
+                return "Indeterminate"
+            if below == 1 and equal == 1 and above == 0:
+                return "Indeterminate"
+        
+        # For 2+ sources: if one has clear majority, it wins
         if above >= self.MIN_INDEPENDENT_SOURCES and above > below and above > equal:
             return "Above"
         if below >= self.MIN_INDEPENDENT_SOURCES and below > above and below > equal:
@@ -1349,6 +1387,7 @@ class ForexCrossRateOracle(gl.Contract):
                     "is_duplicate_domain": src["is_duplicate_domain"],
                     "is_reputable": src["is_reputable"],
                     "rate": None,
+                    "is_dissenting": False,  # Set to True by _aggregate if in minority
                 }
 
                 if not src["valid_scheme"]:

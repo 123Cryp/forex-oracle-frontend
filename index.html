@@ -255,6 +255,16 @@
   .evidence-row:last-child{ border-bottom:none; }
   .evidence-row .domain{ color:var(--text); }
   .evidence-row .flag{ color:var(--text-dim); font-size:10.5px; }
+  .evidence-row .dissenting-badge{ 
+    background:var(--red);
+    color:var(--text);
+    padding:3px 8px;
+    border-radius:3px;
+    font-size:10px;
+    font-weight:600;
+    margin-left:8px;
+    display:inline-block;
+  }
 
   .verdict-hero{ text-align:center; padding:20px 0 6px; }
   .verdict-hero .label{
@@ -861,7 +871,15 @@ function renderAgreement(agreement){
     const flagSpan = makeEl('span', { className: 'flag', text: r.quality_flag || '' });
     const cmp = r.comparison || 'Unclear';
     const cmpBadge = makeEl('span', { className: 'badge badge-cmp-' + cmp, text: cmp });
-    evidenceList.appendChild(makeEl('div', { className: 'evidence-row' }, [domainSpan, flagSpan, cmpBadge]));
+    
+    // Add dissenting badge if is_dissenting is true
+    const rowElements = [domainSpan, flagSpan, cmpBadge];
+    if (r.is_dissenting === true) {
+      const dissentBadge = makeEl('span', { className: 'dissenting-badge', text: '🚩 DISSENTING' });
+      rowElements.push(dissentBadge);
+    }
+    
+    evidenceList.appendChild(makeEl('div', { className: 'evidence-row' }, rowElements));
   }
 }
 
