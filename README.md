@@ -150,9 +150,9 @@ Every method was exercised against the real, deployed contract on GenLayer Studi
 | cancel_agreement by party_a before acceptance | ✅ status → cancelled |
 | expire_agreement before deadline (should reject) | ✅ rejected |
 | expire_agreement after deadline, never accepted | ✅ status → expired |
-| Frontend: connect via test session, create_agreement | ✅ tx finalized, ID auto-filled |
-| Frontend: get_agreement read + DOM-safe render | ✅ rendered correctly |
-| Frontend: get_role, total_agreements | ✅ correct values |
+| Frontend: connect via test session, create_agreement | ✅ tx finalized (agreement ID 5), confirmed on v1.3.0 |
+| Frontend: get_agreement read + DOM-safe render | ✅ rendered correctly — full JSON + fields verified on v1.3.0 |
+| Frontend: get_role, total_agreements | ✅ get_role returned "party_b" correctly; total_agreements returned accurate count, verified on v1.3.0 |
 
 Not exercised live from the frontend UI: a same-browser, two-tab accept_agreement/cancel_agreement round trip. Mobile browsers routinely reclaim memory from backgrounded tabs by reloading them, and since a "test session" wallet lives only in that page load's JavaScript memory, a background reload silently discards it — this is a mobile browser memory-management behavior, not a defect in the contract or frontend. The underlying logic was already confirmed both on live GenLayer Studio (table above) and in the offline suite.
 
