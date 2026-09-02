@@ -547,6 +547,38 @@ class ForexCrossRateOracle(gl.Contract):
                 return stripped_line[len(label_prefix):].strip()
         return ""
 
+    def _validate_rate_timestamp(self, timestamp_str: str, deadline: str, window_seconds: int = 86400) -> bool:
+        """
+        Verify that a rate's timestamp is within the valid window relative to DEADLINE:
+        [deadline - window_seconds, deadline]
+        
+        NOT relative to current execution time. This ensures the rate is relevant to
+        the agreed settlement moment, not just "not from the future at execution time".
+        
+        Returns True if timestamp is within [deadline - 24h, deadline], False otherwise.
+        """
+        if not timestamp_str or not deadline:
+            return False
+        
+        try:
+            from datetime import datetime, timedelta
+            rate_dt = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
+            deadline_dt = datetime.fromisoformat(deadline.replace('Z', '+00:00'))
+            
+            # Rate must be within the window: [deadline - 24h, deadline]
+            # Not before deadline - 24h
+            cutoff_dt = deadline_dt - timedelta(seconds=window_seconds)
+            if rate_dt < cutoff_dt:
+                return False
+            
+            # Not after deadline
+            if rate_dt > deadline_dt:
+                return False
+            
+            return True
+        except (ValueError, AttributeError, TypeError):
+            return False
+
     def _parse_rate(self, raw) -> "float | None":
         """
         Deterministically parse a rate-like string into a positive
@@ -1336,8 +1368,28 @@ class ForexCrossRateOracle(gl.Contract):
                 f"by the submitted sources."
             )
 
+        # VOTING SOURCE SET IS LOCKED: No extra sources beyond committed set allowed.
+        # Verify that NO additional domains are submitted beyond those committed.
+        committed_domains = set()
+        for raw_entry in required_entries:
+            req_domain, _ = self._parse_endpoint_requirement(raw_entry)
+            committed_domains.add(req_domain)
+        
+        submitted_domains = {src["domain"] for src in eligible_sources}
+        extra_domains = submitted_domains - committed_domains
+        
+        if extra_domains:
+            raise gl.vm.UserError(
+                f"This agreement LOCKED the voting source set at "
+                f"create_agreement time. Exactly the committed domains may vote; "
+                f"no extra sources are permitted. Extra domains submitted: "
+                f"{', '.join(sorted(extra_domains))}. "
+                f"Committed domains: {', '.join(sorted(committed_domains))}."
+            )
+
         currency_pair = agreement["currency_pair"]
         threshold_rate = agreement["threshold_rate"]
+        resolution_deadline = agreement["resolution_deadline"]
 
         classify_content = self._classify_content
         build_prompt = self._build_prompt
@@ -1426,7 +1478,9 @@ class ForexCrossRateOracle(gl.Contract):
                 freshness = parse_word(raw, freshness_words, "Unknown", label="FRESHNESS")
                 llm_comparison = parse_word(raw, comparison_words, "Unclear", label="COMPARISON")
                 source_rate = parse_rate(extract_value(raw, "RATE"))
+                source_timestamp = extract_value(raw, "TIMESTAMP")
                 record["rate"] = source_rate
+                record["rate_timestamp"] = source_timestamp
 
                 if pair_match != "Match":
                     record["quality_flag"] = "pair_mismatch"
@@ -1436,6 +1490,9 @@ class ForexCrossRateOracle(gl.Contract):
                     record["comparison"] = "Unclear"
                 elif source_rate is None or parsed_threshold is None:
                     record["quality_flag"] = "rate_unparseable"
+                    record["comparison"] = "Unclear"
+                elif not self._validate_rate_timestamp(source_timestamp, resolution_deadline):
+                    record["quality_flag"] = "timestamp_invalid_or_stale"
                     record["comparison"] = "Unclear"
                 else:
                     # THE CONTRACT, NOT THE MODEL, decides the
