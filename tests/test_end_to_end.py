@@ -63,11 +63,15 @@ CURRENT_BELOW_CONTENT = (
 
 
 def llm_response_for(content):
+    # Timestamp must be within [deadline - 24h, deadline]
+    # Since deadline is ~300 seconds in future, use deadline - 1 hour
+    # (which is still before deadline, within the 24-hour window)
+    valid_timestamp = iso_in(-3600)  # 1 hour before now = well within window
     if "1.0950" in content:
-        return "PAIR: Match\nFRESHNESS: Current\nRATE: 1.0950\nCOMPARISON: Above"
+        return f"PAIR: Match\nFRESHNESS: Current\nRATE: 1.0950\nTIMESTAMP: {valid_timestamp}\nCOMPARISON: Above"
     if "1.0700" in content:
-        return "PAIR: Match\nFRESHNESS: Current\nRATE: 1.0700\nCOMPARISON: Below"
-    return "PAIR: Unclear\nFRESHNESS: Unknown\nRATE: Unclear\nCOMPARISON: Unclear"
+        return f"PAIR: Match\nFRESHNESS: Current\nRATE: 1.0700\nTIMESTAMP: {valid_timestamp}\nCOMPARISON: Below"
+    return f"PAIR: Unclear\nFRESHNESS: Unknown\nRATE: Unclear\nTIMESTAMP: {valid_timestamp}\nCOMPARISON: Unclear"
 
 
 class ResolveHappyPathTests(unittest.TestCase):
@@ -191,7 +195,8 @@ class ResolveQualityGuardrailTests(unittest.TestCase):
         aid = create_and_accept(self.c)
 
         def fake_exec_prompt(prompt, response_format="text"):
-            return "PAIR: Match\nFRESHNESS: Current\nRATE: 1.0950\nCOMPARISON: Below"
+            valid_timestamp = iso_in(-3600)  # Valid within deadline window
+            return f"PAIR: Match\nFRESHNESS: Current\nRATE: 1.0950\nTIMESTAMP: {valid_timestamp}\nCOMPARISON: Below"
 
         with patch.object(
             gl.nondet.web, "render", side_effect=lambda url, mode="text": CURRENT_ABOVE_CONTENT
