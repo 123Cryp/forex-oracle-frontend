@@ -306,5 +306,162 @@ class ResolveGuardrailAndTimingTests(unittest.TestCase):
             )
 
 
+class ProductionPromptContractEndToEndTests(unittest.TestCase):
+    """
+    Regression test for a real bug: the production extraction prompt
+    built by _build_extraction_prompt (called from resolve_agreement)
+    must actually ask the model for a fifth TIMESTAMP field, in
+    addition to PAIR / FRESHNESS / RATE / COMPARISON. If the prompt
+    text does not request TIMESTAMP, gl.nondet.exec_prompt will never
+    return one, source_timestamp will always be empty, and every
+    resolution will silently fail with quality_flag =
+    "timestamp_invalid_or_stale" for every source, forever making
+    resolve_agreement unusable in production.
+
+    This test does NOT hand-construct a mocked LLM response in
+    isolation from the prompt; it inspects the actual prompt text that
+    resolve_agreement builds and sends to gl.nondet.exec_prompt, and
+    only returns a TIMESTAMP field in the mocked reply BECAUSE the
+    prompt is verified to ask for one - proving the whole pipeline
+    (prompt -> five-field parse -> timestamp validation -> quorum ->
+    winner) is wired together correctly end-to-end with the exact
+    five-line output contract PAIR/FRESHNESS/RATE/TIMESTAMP/COMPARISON.
+    """
+
+    def setUp(self):
+        self.c = make_contract()
+
+    def test_prompt_requires_timestamp_field(self):
+        """
+        The production prompt text itself must instruct the model to
+        report TIMESTAMP - this is what the steward flagged as
+        missing. Verified directly against the real prompt-building
+        method used by resolve_agreement.
+        """
+        prompt = self.c._build_prompt(
+            currency_pair="EUR/USD",
+            threshold_rate="1.0850",
+            source_content="dummy content",
+        )
+        self.assertIn("TIMESTAMP", prompt)
+        self.assertIn("ISO-8601", prompt)
+        # Must be listed as one of the five required response lines,
+        # not just mentioned in passing.
+        self.assertIn("TIMESTAMP: <ISO-8601 UTC value, or Unclear>", prompt)
+
+    def test_fresh_multi_source_evidence_reaches_quorum_with_winner(self):
+        """
+        End-to-end: build the mocked LLM reply using the EXACT five-line
+        output contract the production prompt requires (PAIR,
+        FRESHNESS, RATE, TIMESTAMP, COMPARISON), with a fresh
+        (near-"now") TIMESTAMP for every source. Two independent,
+        reputable, agreeing sources must be enough to reach quorum,
+        produce final_verdict == "Above", status == "resolved", and a
+        concrete winner - proving the timestamp requirement does not
+        silently block legitimate resolutions.
+        """
+        aid = create_and_accept(self.c)
+
+        # Fresh timestamp must be computed relative to the agreement's
+        # actual resolution_deadline (which create_and_accept rewrites
+        # into the past), not wall-clock "now" - otherwise a timestamp
+        # that is "fresh" by wall-clock time could still land AFTER the
+        # already-passed deadline and be correctly rejected as invalid.
+        deadline_str = json.loads(self.c.agreements[aid])["resolution_deadline"]
+        deadline_dt = datetime.datetime.fromisoformat(deadline_str)
+        fresh_timestamp = (deadline_dt - datetime.timedelta(seconds=2)).isoformat()
+
+        # Confirm resolve_agreement actually builds a prompt containing
+        # TIMESTAMP for each source before we simulate the model's reply.
+        captured_prompts = []
+
+        def fake_exec_prompt(prompt, response_format="text"):
+            captured_prompts.append(prompt)
+            self.assertIn("TIMESTAMP", prompt)
+            return (
+                "PAIR: Match\n"
+                "FRESHNESS: Current\n"
+                "RATE: 1.0950\n"
+                f"TIMESTAMP: {fresh_timestamp}\n"
+                "COMPARISON: Above"
+            )
+
+        with patch.object(
+            gl.nondet.web, "render",
+            side_effect=lambda url, mode="text": CURRENT_ABOVE_CONTENT,
+        ), patch.object(
+            gl.nondet, "exec_prompt", side_effect=fake_exec_prompt,
+        ):
+            result = json.loads(
+                self.c.resolve_agreement(
+                    aid, ["https://www.xe.com/x", "https://www.oanda.com/y"]
+                )
+            )
+
+        # Both sources' prompts requested TIMESTAMP.
+        self.assertEqual(len(captured_prompts), 2)
+        for p in captured_prompts:
+            self.assertIn("TIMESTAMP", p)
+
+        # Quorum reached with a concrete, recorded winner.
+        self.assertEqual(result["status"], "resolved")
+        self.assertEqual(result["final_verdict"], "Above")
+        self.assertEqual(result["winner"], "party_a")
+        self.assertEqual(len(result["records"]), 2)
+        for record in result["records"]:
+            self.assertEqual(record["quality_flag"], "ok")
+            self.assertEqual(record["comparison"], "Above")
+            self.assertFalse(record["is_dissenting"])
+
+    def test_missing_timestamp_in_reply_flags_source_and_blocks_quorum(self):
+        """
+        If a source's reply genuinely omits TIMESTAMP (model answers
+        "Unclear"), that source must be excluded via quality_flag =
+        "timestamp_invalid_or_stale" - the exact flag name the
+        contract emits and declares in QUALITY_FLAGS - and, with only
+        one remaining eligible source, quorum must fail
+        (Indeterminate), never silently resolving on incomplete
+        evidence.
+        """
+        aid = create_and_accept(self.c)
+        deadline_str = json.loads(self.c.agreements[aid])["resolution_deadline"]
+        deadline_dt = datetime.datetime.fromisoformat(deadline_str)
+        fresh_timestamp = (deadline_dt - datetime.timedelta(seconds=2)).isoformat()
+
+        call_count = {"n": 0}
+
+        def fake_exec_prompt(prompt, response_format="text"):
+            self.assertIn("TIMESTAMP", prompt)
+            call_count["n"] += 1
+            if call_count["n"] == 1:
+                return (
+                    "PAIR: Match\nFRESHNESS: Current\nRATE: 1.0950\n"
+                    f"TIMESTAMP: {fresh_timestamp}\nCOMPARISON: Above"
+                )
+            # Second source: model could not find a timestamp.
+            return (
+                "PAIR: Match\nFRESHNESS: Current\nRATE: 1.0950\n"
+                "TIMESTAMP: Unclear\nCOMPARISON: Above"
+            )
+
+        with patch.object(
+            gl.nondet.web, "render",
+            side_effect=lambda url, mode="text": CURRENT_ABOVE_CONTENT,
+        ), patch.object(
+            gl.nondet, "exec_prompt", side_effect=fake_exec_prompt,
+        ):
+            result = json.loads(
+                self.c.resolve_agreement(
+                    aid, ["https://www.xe.com/x", "https://www.oanda.com/y"]
+                )
+            )
+
+        flags = {r["domain"]: r["quality_flag"] for r in result["records"]}
+        self.assertIn("timestamp_invalid_or_stale", flags.values())
+        self.assertIn("timestamp_invalid_or_stale", self.c.QUALITY_FLAGS)
+        self.assertEqual(result["final_verdict"], "Indeterminate")
+        self.assertEqual(result["winner"], "unresolved")
+
+
 if __name__ == "__main__":
     unittest.main()
