@@ -619,6 +619,27 @@ function extractReturnValue(receipt){
   return value;
 }
 
+/**
+ * A transaction reaching status FINALIZED does NOT mean the contract
+ * method call itself succeeded — validators can reach consensus that
+ * a call correctly rolled back (e.g. "not open for resolution yet",
+ * "only party_b may accept", a locked source set rejecting an extra
+ * domain). Those are still FINALIZED transactions, just with a
+ * rollback result. This inspects the leader's receipt and throws a
+ * descriptive Error if the execution was not a successful return, so
+ * callers never display a rollback/error as if it were a success.
+ */
+function assertExecutionSucceeded(receipt){
+  const leader = receipt?.consensus_data?.leader_receipt?.[0];
+  const status = leader?.result?.status;
+  const executionResult = leader?.execution_result;
+  if (status === 'rollback' || executionResult === 'ERROR') {
+    const payload = leader?.result?.payload;
+    const message = typeof payload === 'string' ? payload : JSON.stringify(payload);
+    throw new Error(`Contract call rolled back: ${message || 'unknown reason'}`);
+  }
+}
+
 function requireClient(out){
   if (!client) {
     showOut(out, 'Connect a wallet first (MetaMask or test session).', 'err');
@@ -659,6 +680,7 @@ document.getElementById('createBtn').addEventListener('click', async () => {
     const receipt = await client.waitForTransactionReceipt({
       hash: txHash, status: 'FINALIZED', interval: 4000, retries: 30,
     });
+    assertExecutionSucceeded(receipt);
     const agreementId = extractReturnValue(receipt);
     if (agreementId !== null && agreementId !== undefined) {
       showOut(out, `Agreement created. ID: ${agreementId}\n\nTx: ${txHash}`, 'ok');
@@ -689,6 +711,7 @@ document.getElementById('acceptBtn').addEventListener('click', async () => {
     const receipt = await client.waitForTransactionReceipt({
       hash: txHash, status: 'FINALIZED', interval: 4000, retries: 30,
     });
+    assertExecutionSucceeded(receipt);
     const result = extractReturnValue(receipt);
     showOut(out, `Accepted.\n\nTx: ${txHash}\n\n${result !== null ? JSON.stringify(result, null, 2) : 'See explorer.'}`, 'ok');
   } catch (err) {
@@ -710,6 +733,7 @@ document.getElementById('cancelBtn').addEventListener('click', async () => {
     const receipt = await client.waitForTransactionReceipt({
       hash: txHash, status: 'FINALIZED', interval: 4000, retries: 30,
     });
+    assertExecutionSucceeded(receipt);
     const result = extractReturnValue(receipt);
     showOut(out, `Cancelled.\n\nTx: ${txHash}\n\n${result !== null ? JSON.stringify(result, null, 2) : 'See explorer.'}`, 'ok');
   } catch (err) {
@@ -740,6 +764,7 @@ document.getElementById('resolveBtn').addEventListener('click', async () => {
     const receipt = await client.waitForTransactionReceipt({
       hash: txHash, status: 'FINALIZED', interval: 5000, retries: 90,
     });
+    assertExecutionSucceeded(receipt);
     const result = extractReturnValue(receipt);
     showOut(out, `Resolved.\n\nTx: ${txHash}\n\n${result !== null ? JSON.stringify(result, null, 2) : JSON.stringify(receipt, null, 2)}`, 'ok');
     document.getElementById('readId').value = id;
@@ -769,6 +794,7 @@ document.getElementById('expireBtn').addEventListener('click', async () => {
     const receipt = await client.waitForTransactionReceipt({
       hash: txHash, status: 'FINALIZED', interval: 4000, retries: 30,
     });
+    assertExecutionSucceeded(receipt);
     const result = extractReturnValue(receipt);
     showOut(out, `Expired.\n\nTx: ${txHash}\n\n${result !== null ? JSON.stringify(result, null, 2) : 'See explorer.'}`, 'ok');
   } catch (err) {
