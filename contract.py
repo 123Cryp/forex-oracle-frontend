@@ -123,6 +123,7 @@ class ForexCrossRateOracle(gl.Contract):
         "pair_mismatch",              # source did not quote the exact requested pair/direction
         "stale_or_unknown_freshness", # source rate was not clearly current
         "rate_unparseable",           # source RATE or the agreement's threshold_rate didn't parse
+        "timestamp_invalid_or_stale", # source TIMESTAMP missing/unparseable/outside [deadline-24h, deadline]
         "comparison_mismatch",        # LLM's self-reported COMPARISON disagreed with the deterministic one
     )
     FINAL_VERDICTS = (
@@ -869,7 +870,15 @@ class ForexCrossRateOracle(gl.Contract):
            this pair and direction, answer exactly:
            Unclear
 
-        4. COMPARISON: Regardless of your other answers, state whether
+        4. TIMESTAMP: What is the exact date/time this rate was quoted
+           or last updated, according to the source content? Report it
+           strictly in ISO-8601 UTC format, e.g. "2026-08-30T14:00:00Z".
+           If the source gives a date/time in another format, convert
+           it to ISO-8601 UTC as best you can. If the source gives NO
+           identifiable timestamp for this rate at all, answer exactly:
+           Unclear
+
+        5. COMPARISON: Regardless of your other answers, state whether
            the rate you found in step 3 is Above, Below, or Equal to
            the threshold ({threshold_rate}). If you answered Unclear
            for RATE, answer Unclear here too. Answer exactly one of:
@@ -878,11 +887,12 @@ class ForexCrossRateOracle(gl.Contract):
            Equal
            Unclear
 
-        Respond with EXACTLY four lines, in this exact format, and
+        Respond with EXACTLY five lines, in this exact format, and
         nothing else - no punctuation, no explanation, no extra text:
         PAIR: <your answer>
         FRESHNESS: <your answer>
         RATE: <numeric value, or Unclear>
+        TIMESTAMP: <ISO-8601 UTC value, or Unclear>
         COMPARISON: <your answer>
         """
 

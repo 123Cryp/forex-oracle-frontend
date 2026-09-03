@@ -10,7 +10,7 @@ A two-party, address-bound, deadline-gated, multi-source forex cross-rate settle
 
 - `contract.py` — the Intelligent Contract (GenLayer / GenVM, Python)
 - `index.html` — the entire frontend — HTML/CSS/JS, no build step
-- `tests/` — contract.py's offline test suite (126/126 passing)
+- `tests/` — contract.py's offline test suite (129/129 passing)
 - `README.md`
 
 Run tests with:
@@ -35,6 +35,8 @@ Every agreement carries a `resolution_deadline` (an ISO-8601 UTC timestamp) fixe
 - Rate timestamp must be <= `resolution_deadline`
 
 This ensures settlement is based on rates actually relevant to the agreed moment. A rate with a timestamp outside this window is automatically flagged as `quality_flag: "timestamp_invalid_or_stale"` and excluded from consensus.
+
+The production extraction prompt built by `_build_prompt` (the exact text sent to `gl.nondet.exec_prompt` inside `resolve_agreement`) explicitly requires the model to answer a fifth field, `TIMESTAMP`, in strict ISO-8601 UTC, alongside `PAIR`, `FRESHNESS`, `RATE`, and `COMPARISON` — it is not enough for the validation logic to exist if the model is never asked for a timestamp in the first place. `tests/test_end_to_end.py::ProductionPromptContractEndToEndTests` asserts directly against the real prompt text (not a hand-written mock reply in isolation) that `TIMESTAMP` is requested, then exercises the full pipeline with the exact five-line `PAIR/FRESHNESS/RATE/TIMESTAMP/COMPARISON` output contract to prove two fresh, agreeing sources reach quorum and produce a concrete winner, and that a source which genuinely omits a timestamp is flagged with the same `timestamp_invalid_or_stale` value declared in `QUALITY_FLAGS` and excluded from quorum.
 
 ### 3. Mandatory multi-source corroboration with fully locked voting source set
 `required_source_domains` is **not optional** and is **locked at creation** — every agreement must commit at least 2 distinct, reputable, allowlisted FX data domains at creation time. **The voting source set is fully locked:** at resolution time, submitted source URLs must match exactly the committed domains. No additional domains beyond the committed set may participate in voting.
@@ -113,7 +115,7 @@ This page loads `genlayer-js` from a CDN, so it needs no npm install or bundler.
 
 ## Testing
 
-### Offline unit/integration tests (126/126 passing)
+### Offline unit/integration tests (129/129 passing)
 
 ```
 tests/
@@ -122,9 +124,9 @@ tests/
 ├── test_domain_and_rate_parsing.py        35 tests — domain/path/rate/timestamp parsing
 ├── test_aggregation.py                    11 tests — multi-source verdict aggregation
 ├── test_party_binding_and_timing.py       38 tests — party binding, state machine, deadlines
-├── test_end_to_end.py                     17 tests — full resolve pipeline, web/LLM mocked
 ├── test_quorum_and_dissenting.py          15 tests — quorum scenarios and dissenting source tracking
-└── test_timestamp_verification.py         10 tests — timestamped rate validation
+├── test_timestamp_verification.py         10 tests — timestamped rate validation
+└── test_end_to_end.py                     20 tests — full resolve pipeline (17 base + 3 production-prompt-contract regression tests, incl. the exact 5-field PAIR/FRESHNESS/RATE/TIMESTAMP/COMPARISON output the real prompt requires)
 ```
 
 Run with:
