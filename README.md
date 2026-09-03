@@ -2,8 +2,8 @@
 
 A two-party, address-bound, deadline-gated, multi-source forex cross-rate settlement Intelligent Contract for GenLayer, plus a minimal no-build-step frontend that talks to it directly. Built from a clean slate for the forex vertical — it borrows only proven structural patterns (the fetch → LLM-extraction → deterministic-comparison pipeline, prompt_comparative validator consensus) from a prior, unrelated GenLayer project, and rebuilds every trust-sensitive control from scratch specifically for two-party FX agreements.
 
-**Live contract:** `0x63E42c828DBd622f157FaBD27C71392d49C98247` on GenLayer Studio  
-**Explorer:** https://explorer-studio.genlayer.com/address/0x63E42c828DBd622f157FaBD27C71392d49C98247  
+**Live contract:** `0x83D722C3E68e1e675882899Ec6b8De508e7EBC54` on GenLayer Studio  
+**Explorer:** https://explorer-studio.genlayer.com/address/0x83D722C3E68e1e675882899Ec6b8De508e7EBC54  
 **Live frontend:** https://123cryp.github.io/forex-oracle-frontend/
 
 ## Repository layout
