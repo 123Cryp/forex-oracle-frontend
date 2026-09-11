@@ -53,22 +53,26 @@ On top of domain locking, each source's evidence is also checked for **pair/dire
 
 ## What this is
 
-A single static page (`index.html`, no build step, no framework) plus the contract it calls, that lets a person:
+A single static page (`index.html`, no build step, no framework) plus the contract it calls. The page is split into four dedicated screens (client-side hash routing — still one file, still zero build step) so each user action gets its own space instead of one long scrolling form:
 
-1. **Create an agreement** — enter counterparty address, currency pair, threshold rate, comparison direction, description, resolution deadline, and required source domains, and submit `create_agreement`. The caller automatically becomes `party_a`.
-2. **Accept or cancel** — the counterparty calls `accept_agreement` to bind themselves as `party_b`; creator can `cancel_agreement` before acceptance.
-3. **Resolve an agreement** — once the deadline arrives, submit 2–6 candidate source URLs and call `resolve_agreement`, which triggers the contract's real fetch → LLM-extraction → deterministic-comparison → validator-consensus pipeline.
-4. **Expire a lapsed agreement** — permissionlessly, once its deadline or resolution window has closed.
-5. **Read an agreement** — call `get_agreement` and see the full evidence trail rendered as a readable list, plus the final verdict and winner.
+1. **New agreement** — enter counterparty address, currency pair, threshold rate, comparison direction, description, resolution deadline, and required source domains, and submit `create_agreement`. The caller automatically becomes `party_a`.
+2. **Manage agreement** — the three lifecycle actions for one agreement ID, in order: accept/cancel, resolve, expire.
+   - *Accept or cancel* — the counterparty calls `accept_agreement` to bind themselves as `party_b`; the creator can `cancel_agreement` before acceptance.
+   - *Resolve* — once the deadline arrives, submit 2–6 candidate source URLs and call `resolve_agreement`, which triggers the contract's real fetch → LLM-extraction → deterministic-comparison → validator-consensus pipeline.
+   - *Expire* — permissionlessly clean up a lapsed agreement once its deadline or resolution window has closed.
+3. **Look up** — call `get_agreement` for a full evidence trail plus the final verdict and winner; `get_role` to check whether an address is `party_a`/`party_b`/unrelated; `total_agreements` for the running count.
+4. **Explorer** — a live, filterable table of every agreement this contract instance has ever handled (pending, open, resolved, expired, cancelled), built by reading `total_agreements()` once and then `get_agreement()` for every ID. No wallet needed. Clicking any row jumps straight to that case on the Look Up screen. This is the project's transparency surface — anyone can audit every past decision without needing an indexer or backend.
 
 All actions call the deployed contract directly through [`genlayer-js`](https://github.com/genlayerlabs/genlayer-js) — no backend server. Read calls use an unauthenticated client. Write calls support:
 
 - **MetaMask** — click "connect MetaMask." Requires MetaMask or another injected-provider wallet.
 - **Test session** — click "start test session." Generates a fresh, throwaway keypair in the browser, holds no real value, resets on reload.
 
+Every write button disables itself and shows a busy label for the duration of its transaction, and every transaction receipt is checked for an actual successful execution (not just `FINALIZED` status) before any success message is shown — a rolled-back call (wrong wallet, expired deadline, a locked source set rejecting an extra domain) always surfaces the contract's real error text instead of a false "success."
+
 ## DOM-safe frontend
 
-Every dynamic value `index.html` renders — party addresses, descriptions, domains, URLs, quality flags, raw contract JSON — is written using only `document.createElement` and `.textContent`. `innerHTML` is never used anywhere, so nothing returned from the contract or fetched off-chain can ever be interpreted as HTML/script by the page.
+Every dynamic value `index.html` renders — party addresses, descriptions, domains, URLs, quality flags, raw contract JSON, the entire Explorer table — is written using only `document.createElement` and `.textContent`. `innerHTML` is never used anywhere, so nothing returned from the contract or fetched off-chain can ever be interpreted as HTML/script by the page.
 
 ## Running it
 
@@ -152,9 +156,14 @@ Every method was exercised against the real, deployed contract on GenLayer Studi
 | cancel_agreement by party_a before acceptance | ✅ status → cancelled |
 | expire_agreement before deadline (should reject) | ✅ rejected |
 | expire_agreement after deadline, never accepted | ✅ status → expired |
-| Frontend: connect via test session, create_agreement | ✅ tx finalized (agreement ID 5), confirmed on v1.3.0 |
+| Frontend: connect via test session, create agreement | ✅ tx finalized (agreement ID 5), confirmed on v1.3.0 |
 | Frontend: get_agreement read + DOM-safe render | ✅ rendered correctly — full JSON + fields verified on v1.3.0 |
 | Frontend: get_role, total_agreements | ✅ get_role returned "party_b" correctly; total_agreements returned accurate count, verified on v1.3.0 |
+| Frontend: rollback vs success detection | ✅ a wrong-wallet accept_agreement call correctly surfaces the real rollback error instead of a false "Accepted.", verified on v1.4.1 |
+| Frontend: Explorer loads and renders every agreement | ✅ total_agreements() + per-ID get_agreement() reads render as a filterable table with correct status/verdict badges |
+| Frontend: Explorer empty state | ✅ shows a "No agreements yet" state with a link into New Agreement when total_agreements() is 0 |
+| Frontend: Explorer row click → Look Up | ✅ clicking a row switches view and pre-loads that agreement ID |
+| Frontend: static analysis (v1.5.0) | ✅ every `getElementById` target confirmed present, every button confirmed wired to a listener, JS validated with `node --check`, HTML tag balance validated with a parser |
 
 Not exercised live from the frontend UI: a same-browser, two-tab accept_agreement/cancel_agreement round trip. Mobile browsers routinely reclaim memory from backgrounded tabs by reloading them, and since a "test session" wallet lives only in that page load's JavaScript memory, a background reload silently discards it — this is a mobile browser memory-management behavior, not a defect in the contract or frontend. The underlying logic was already confirmed both on live GenLayer Studio (table above) and in the offline suite.
 
