@@ -3,12 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ForexCrossRateOracle — Terminal</title>
+<title>Cross-Rate Desk — ForexCrossRateOracle</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   :root{
     --bg-deep:#0B0F14;
+    --bg-rail:#0E1319;
     --bg-panel:#121821;
     --bg-panel-raised:#182130;
     --line:#232D3B;
@@ -32,11 +33,13 @@
   }
   a{color:var(--teal-bright);}
   code{ font-family:'IBM Plex Mono',monospace; }
+  button{ font-family:inherit; }
 
+  /* ---------- header ---------- */
   header{
     max-width:1180px;
     margin:0 auto;
-    padding:44px 20px 26px;
+    padding:36px 20px 22px;
   }
   .eyebrow{
     font-family:'IBM Plex Mono',monospace;
@@ -49,28 +52,19 @@
   h1{
     font-family:'Zilla Slab',serif;
     font-weight:700;
-    font-size:clamp(30px,5vw,46px);
-    line-height:1.08;
-    margin:0 0 14px;
+    font-size:clamp(28px,4.4vw,40px);
+    line-height:1.1;
+    margin:0 0 12px;
     color:var(--text);
   }
   h1 em{ font-style:normal; color:var(--teal-bright); }
   .lede{
-    font-size:16px;
+    font-size:15.5px;
     line-height:1.6;
     color:var(--text-dim);
-    max-width:640px;
+    max-width:620px;
     margin:0 0 6px;
   }
-  .addr-line{
-    font-family:'IBM Plex Mono',monospace;
-    font-size:12px;
-    color:var(--text-dim);
-    margin-top:16px;
-    padding-top:16px;
-    border-top:1px solid var(--line);
-  }
-  .addr-line code{ color:var(--teal-bright); word-break:break-all; }
   .status-pill{
     display:flex;
     flex-wrap:wrap;
@@ -82,7 +76,7 @@
     border:1px solid var(--line);
     border-radius:10px;
     padding:10px 14px;
-    margin-top:14px;
+    margin-top:16px;
   }
   .dot{ width:7px; height:7px; border-radius:50%; background:var(--slate); flex-shrink:0; }
   .dot.on{ background:var(--green); box-shadow:0 0 8px var(--green); }
@@ -92,18 +86,85 @@
     padding:6px 10px;border-radius:6px;
   }
   .status-pill button:hover{ border-color:var(--teal); }
+  .addr-line{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:12px;
+    color:var(--text-dim);
+    margin-top:14px;
+  }
+  .addr-line code{ color:var(--teal-bright); word-break:break-all; }
 
-  main{
+  /* ---------- app shell: rail + content ---------- */
+  .shell{
     max-width:1180px;
     margin:0 auto;
-    padding:0 20px 80px;
+    padding:0 20px 90px;
     display:grid;
-    grid-template-columns:1fr 1fr;
-    gap:18px;
+    grid-template-columns:200px 1fr;
+    gap:28px;
+    align-items:start;
   }
-  @media (max-width:920px){ main{ grid-template-columns:1fr; } }
+  nav.rail{
+    position:sticky; top:20px;
+    display:flex; flex-direction:column; gap:2px;
+    border-right:1px solid var(--line);
+    padding-right:16px;
+  }
+  nav.rail .navlink{
+    display:block;
+    background:none; border:none;
+    text-align:left;
+    color:var(--text-dim);
+    font-family:'Inter',sans-serif;
+    font-size:14px; font-weight:500;
+    padding:10px 12px;
+    border-radius:6px;
+    cursor:pointer;
+    border-left:2px solid transparent;
+  }
+  nav.rail .navlink .sub{
+    display:block; font-family:'IBM Plex Mono',monospace;
+    font-size:10.5px; color:var(--slate); margin-top:2px; font-weight:400;
+  }
+  nav.rail .navlink:hover{ color:var(--text); background:var(--bg-rail); }
+  nav.rail .navlink.active{
+    color:var(--teal-bright);
+    background:var(--bg-rail);
+    border-left:2px solid var(--teal);
+  }
+  nav.rail .navlink.active .sub{ color:var(--text-dim); }
 
-  .col{ display:flex; flex-direction:column; gap:18px; }
+  /* mobile tab strip */
+  .tabstrip{ display:none; }
+  @media (max-width:860px){
+    .shell{ grid-template-columns:1fr; }
+    nav.rail{ display:none; }
+    .tabstrip{
+      display:flex; gap:6px; overflow-x:auto;
+      padding:0 20px 16px; margin-top:4px;
+      -webkit-overflow-scrolling:touch;
+    }
+    .tabstrip button{
+      flex-shrink:0;
+      background:var(--bg-panel); border:1px solid var(--line);
+      color:var(--text-dim);
+      font-family:'Inter',sans-serif; font-size:13px; font-weight:500;
+      padding:9px 14px; border-radius:100px; cursor:pointer;
+    }
+    .tabstrip button.active{ color:var(--teal-bright); border-color:var(--teal); }
+  }
+
+  .view{ display:none; }
+  .view.active{ display:block; }
+  .view-head{ margin-bottom:22px; }
+  .view-head h2{
+    font-family:'Zilla Slab',serif; font-weight:600; font-size:23px; margin:0 0 6px;
+  }
+  .view-head p{ font-size:13.5px; color:var(--text-dim); line-height:1.55; margin:0; max-width:560px; }
+
+  .stack{ display:flex; flex-direction:column; gap:18px; max-width:560px; }
+  .grid2{ display:grid; grid-template-columns:1fr 1fr; gap:18px; align-items:start; }
+  @media (max-width:860px){ .grid2{ grid-template-columns:1fr; } }
 
   .panel{
     background:var(--bg-panel);
@@ -111,26 +172,17 @@
     border-radius:8px;
     padding:22px;
   }
-  .panel h2{
+  .panel h3{
     font-family:'Zilla Slab',serif;
-    font-size:19px;
+    font-size:17px;
     font-weight:600;
     margin:0 0 4px;
-    display:flex;
-    align-items:baseline;
-    gap:9px;
-  }
-  .panel h2 .idx{
-    font-family:'IBM Plex Mono',monospace;
-    font-size:11px;
-    color:var(--teal);
-    font-weight:500;
   }
   .panel .desc{
     font-size:13px;
     color:var(--text-dim);
     line-height:1.5;
-    margin:0 0 18px;
+    margin:0 0 16px;
   }
 
   label{
@@ -168,15 +220,15 @@
     color:#06110F;
     border:none;
     border-radius:5px;
-    font-family:'Inter',sans-serif;
     font-weight:600;
     font-size:14px;
     padding:11px 16px;
     cursor:pointer;
-    transition:background .15s ease, transform .1s ease;
+    transition:background .15s ease, transform .1s ease, opacity .15s ease;
   }
   button.primary:hover{ background:var(--teal-bright); }
   button.primary:active{ transform:scale(.99); }
+  button.primary:disabled{ opacity:.55; cursor:wait; transform:none; }
   button.secondary{
     margin-top:10px;
     width:100%;
@@ -184,13 +236,18 @@
     color:var(--text-dim);
     border:1px solid var(--line);
     border-radius:5px;
-    font-family:'Inter',sans-serif;
     font-weight:500;
     font-size:13px;
     padding:9px 14px;
     cursor:pointer;
   }
   button.secondary:hover{ border-color:var(--teal); color:var(--teal-bright); }
+  button.secondary:disabled{ opacity:.5; cursor:wait; }
+  button.ghost{
+    background:none; border:1px solid var(--line); color:var(--text-dim);
+    border-radius:6px; font-size:12.5px; padding:7px 12px; cursor:pointer;
+  }
+  button.ghost:hover{ border-color:var(--teal); color:var(--teal-bright); }
 
   .out{
     margin-top:14px;
@@ -206,9 +263,11 @@
     max-height:320px;
     overflow:auto;
     color:var(--text-dim);
+    display:none;
   }
   .out.ok{ border-color:#1F3329; color:var(--green); }
   .out.err{ border-color:#3A2222; color:var(--red); }
+  .out.pending{ color:var(--text-dim); }
 
   .field-row{
     display:flex;
@@ -255,26 +314,82 @@
   .evidence-row:last-child{ border-bottom:none; }
   .evidence-row .domain{ color:var(--text); }
   .evidence-row .flag{ color:var(--text-dim); font-size:10.5px; }
-  .evidence-row .dissenting-badge{ 
-    background:var(--red);
-    color:var(--text);
-    padding:3px 8px;
-    border-radius:3px;
-    font-size:10px;
-    font-weight:600;
-    margin-left:8px;
-    display:inline-block;
+  .evidence-row .dissenting-badge{
+    background:var(--red); color:var(--text); padding:3px 8px; border-radius:3px;
+    font-size:10px; font-weight:600; margin-left:8px; display:inline-block;
   }
 
-  .verdict-hero{ text-align:center; padding:20px 0 6px; }
+  .verdict-hero{ text-align:center; padding:18px 0 4px; }
   .verdict-hero .label{
     font-family:'IBM Plex Mono',monospace; font-size:11px; letter-spacing:.12em;
     text-transform:uppercase; color:var(--text-dim);
   }
-  .verdict-hero .value{
-    font-family:'Zilla Slab',serif; font-weight:700; font-size:38px; margin:4px 0;
-  }
+  .verdict-hero .value{ font-family:'Zilla Slab',serif; font-weight:700; font-size:36px; margin:4px 0; }
   .verdict-hero .winner{ font-family:'IBM Plex Mono',monospace; font-size:12.5px; color:var(--text-dim); }
+
+  /* ---------- Manage: lifecycle stepper ---------- */
+  .stage{
+    display:flex; gap:16px;
+    padding:20px 0;
+    border-bottom:1px solid var(--line);
+  }
+  .stage:last-child{ border-bottom:none; }
+  .stage .num{
+    flex-shrink:0; width:26px; height:26px; border-radius:50%;
+    border:1px solid var(--line); color:var(--text-dim);
+    font-family:'IBM Plex Mono',monospace; font-size:12px;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .stage .body{ flex:1; min-width:0; }
+  .stage h4{ font-family:'Zilla Slab',serif; font-size:15.5px; font-weight:600; margin:2px 0 4px; }
+  .stage .desc{ font-size:12.5px; color:var(--text-dim); line-height:1.5; margin:0 0 12px; }
+  .stage-actions{ display:flex; gap:10px; flex-wrap:wrap; }
+  .stage-actions button{ flex:1; min-width:140px; margin-top:0; }
+
+  /* ---------- Explorer ---------- */
+  .filter-row{ display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px; }
+  .chip{
+    background:var(--bg-panel-raised); border:1px solid var(--line); color:var(--text-dim);
+    font-size:12.5px; font-family:'IBM Plex Mono',monospace;
+    padding:6px 13px; border-radius:100px; cursor:pointer;
+  }
+  .chip.active{ color:var(--teal-bright); border-color:var(--teal); }
+  .explorer-table{ width:100%; border-collapse:collapse; font-size:13px; }
+  .explorer-table th{
+    text-align:left; font-family:'IBM Plex Mono',monospace; font-size:10.5px;
+    letter-spacing:.05em; text-transform:uppercase; color:var(--text-dim);
+    padding:0 12px 10px; border-bottom:1px solid var(--line); font-weight:500;
+  }
+  .explorer-table td{
+    padding:12px; border-bottom:1px solid var(--line); vertical-align:middle;
+    color:var(--text);
+  }
+  .explorer-table tr.rowbtn{ cursor:pointer; }
+  .explorer-table tr.rowbtn:hover td{ background:var(--bg-panel-raised); }
+  .explorer-table td.mono, .explorer-table th.mono{ font-family:'IBM Plex Mono',monospace; font-size:12px; }
+  .explorer-table td.num{ color:var(--text-dim); font-family:'IBM Plex Mono',monospace; }
+  .explorer-empty{
+    text-align:center; padding:50px 20px; color:var(--text-dim);
+  }
+  .explorer-empty h4{ font-family:'Zilla Slab',serif; color:var(--text); font-size:18px; margin:0 0 8px; }
+  .explorer-empty a.cta{
+    display:inline-block; margin-top:14px; color:var(--teal-bright);
+    border:1px solid var(--teal); border-radius:6px; padding:9px 16px;
+    text-decoration:none; font-size:13.5px; cursor:pointer;
+  }
+  .explorer-summary{
+    display:flex; gap:22px; flex-wrap:wrap; margin-bottom:20px;
+    font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--text-dim);
+  }
+  .explorer-summary b{ color:var(--text); font-size:15px; font-family:'Inter',sans-serif; display:block; }
+  .explorer-scroll{ overflow-x:auto; }
+  .loading-row{ display:flex; align-items:center; gap:10px; color:var(--text-dim); font-size:13px; padding:16px 0; }
+  .spinner{
+    width:14px; height:14px; border-radius:50%;
+    border:2px solid var(--line); border-top-color:var(--teal-bright);
+    animation:spin .7s linear infinite; flex-shrink:0;
+  }
+  @keyframes spin{ to{ transform:rotate(360deg); } }
 
   footer{
     max-width:1180px; margin:0 auto; padding:0 20px 56px;
@@ -288,11 +403,11 @@
     <p class="eyebrow">GenLayer Intelligent Contract — Frontend</p>
     <h1>Cross-Rate Desk:<br><em>a terminal for ForexCrossRateOracle</em></h1>
     <p class="lede">
-      A minimal dApp for ForexCrossRateOracle — the two-party, address-bound,
+      A dApp for ForexCrossRateOracle — the two-party, address-bound,
       deadline-gated, multi-source forex settlement contract on GenLayer.
       Create an agreement, have the counterparty accept it, submit sources for
-      resolution once the deadline arrives, and read back the deterministic
-      verdict straight from validator consensus.
+      resolution once the deadline arrives, and browse every case the desk has
+      ever settled.
     </p>
     <div class="status-pill" id="statusPill">
       <span class="dot" id="statusDot"></span>
@@ -312,174 +427,231 @@
     </p>
   </header>
 
-  <main>
+  <div class="tabstrip" id="tabstrip">
+    <button data-view="new" class="active" type="button">New agreement</button>
+    <button data-view="manage" type="button">Manage</button>
+    <button data-view="lookup" type="button">Look up</button>
+    <button data-view="explorer" type="button">Explorer</button>
+  </div>
 
-    <div class="col">
+  <div class="shell">
 
-      <!-- 01 CREATE AGREEMENT -->
-      <section class="panel">
-        <h2><span class="idx">01</span> Create Agreement</h2>
-        <p class="desc">
-          You (the connected wallet) automatically become <code>party_a</code>.
-          Enter the counterparty's address as <code>party_b</code> — they must
-          separately accept before this binds them.
-        </p>
+    <nav class="rail" id="rail">
+      <button class="navlink active" data-view="new" type="button">
+        New agreement
+        <span class="sub">create_agreement</span>
+      </button>
+      <button class="navlink" data-view="manage" type="button">
+        Manage agreement
+        <span class="sub">accept · resolve · expire</span>
+      </button>
+      <button class="navlink" data-view="lookup" type="button">
+        Look up
+        <span class="sub">get_agreement · get_role</span>
+      </button>
+      <button class="navlink" data-view="explorer" type="button">
+        Explorer
+        <span class="sub">every case, at a glance</span>
+      </button>
+    </nav>
 
-        <label for="partyB">Party B address</label>
-        <input type="text" id="partyB" placeholder="0x...">
+    <div class="content">
 
-        <div class="row2">
-          <div>
-            <label for="pair">Currency pair</label>
-            <input type="text" id="pair" value="EUR/USD">
-          </div>
-          <div>
-            <label for="comparison">Party A wins if rate is</label>
-            <select id="comparison">
-              <option value="above">above threshold</option>
-              <option value="below">below threshold</option>
-            </select>
-          </div>
+      <!-- ============ VIEW: NEW AGREEMENT ============ -->
+      <section class="view active" id="view-new">
+        <div class="view-head">
+          <h2>Start a new agreement</h2>
+          <p>You (the connected wallet) automatically become <code>party_a</code>. Enter the counterparty's address as <code>party_b</code> — they accept separately before this binds them.</p>
         </div>
 
-        <label for="threshold">Threshold rate</label>
-        <input type="text" id="threshold" value="1.0850">
+        <div class="stack">
+          <div class="panel">
+            <label for="partyB">Party B address</label>
+            <input type="text" id="partyB" placeholder="0x...">
 
-        <label for="description">Description</label>
-        <input type="text" id="description" value="Terminal demo agreement">
+            <div class="row2">
+              <div>
+                <label for="pair">Currency pair</label>
+                <input type="text" id="pair" value="EUR/USD">
+              </div>
+              <div>
+                <label for="comparison">Party A wins if rate is</label>
+                <select id="comparison">
+                  <option value="above">above threshold</option>
+                  <option value="below">below threshold</option>
+                </select>
+              </div>
+            </div>
 
-        <label for="deadline">Resolution deadline (your local time)</label>
-        <input type="datetime-local" id="deadline">
-        <p class="hint">Converted to UTC automatically. Must be at least 5 minutes from now.</p>
+            <label for="threshold">Threshold rate</label>
+            <input type="text" id="threshold" value="1.0850">
 
-        <label for="requiredDomains">Required source domains <span style="text-transform:none;letter-spacing:0;">(min 2, comma-separated)</span></label>
-        <textarea id="requiredDomains" placeholder="xe.com, oanda.com">xe.com, oanda.com</textarea>
-        <p class="hint">Allowed: xe.com, oanda.com, investing.com, tradingeconomics.com, x-rates.com, fxstreet.com, bloomberg.com, reuters.com, wsj.com, marketwatch.com, forex.com, wise.com, dailyfx.com, exchangerates.org.uk, federalreserve.gov, bankofengland.co.uk</p>
+            <label for="description">Description</label>
+            <input type="text" id="description" value="Terminal demo agreement">
 
-        <button class="primary" id="createBtn" type="button">Submit create_agreement</button>
-        <div class="out" id="createOut"></div>
+            <label for="deadline">Resolution deadline (your local time)</label>
+            <input type="datetime-local" id="deadline">
+            <p class="hint">Converted to UTC automatically. Must be at least 5 minutes from now.</p>
+
+            <label for="requiredDomains">Required source domains <span style="text-transform:none;letter-spacing:0;">(min 2, comma-separated)</span></label>
+            <textarea id="requiredDomains" placeholder="xe.com, oanda.com">xe.com, oanda.com</textarea>
+            <p class="hint">Allowed: xe.com, oanda.com, investing.com, tradingeconomics.com, x-rates.com, fxstreet.com, bloomberg.com, reuters.com, wsj.com, marketwatch.com, forex.com, wise.com, dailyfx.com, exchangerates.org.uk, federalreserve.gov, bankofengland.co.uk</p>
+
+            <button class="primary" id="createBtn" type="button">Create agreement</button>
+            <div class="out" id="createOut"></div>
+          </div>
+        </div>
       </section>
 
-      <!-- 02 ACCEPT / CANCEL -->
-      <section class="panel">
-        <h2><span class="idx">02</span> Accept / Cancel Agreement</h2>
-        <p class="desc">
-          <code>accept_agreement</code> must be called by the wallet set as
-          <code>party_b</code>. <code>cancel_agreement</code> must be called by
-          <code>party_a</code>, and only while still awaiting acceptance.
-        </p>
+      <!-- ============ VIEW: MANAGE ============ -->
+      <section class="view" id="view-manage">
+        <div class="view-head">
+          <h2>Manage an agreement</h2>
+          <p>Every agreement moves through the same lifecycle. Enter its ID once below, then act on whichever stage applies.</p>
+        </div>
 
-        <label for="acceptId">Agreement ID</label>
-        <input type="text" id="acceptId" placeholder="0">
+        <div class="stack" style="max-width:640px;">
+          <div class="panel">
+            <label for="manageId">Agreement ID</label>
+            <input type="text" id="manageId" placeholder="0">
+          </div>
 
-        <button class="primary" id="acceptBtn" type="button">Submit accept_agreement</button>
-        <button class="secondary" id="cancelBtn" type="button">Submit cancel_agreement</button>
-        <div class="out" id="acceptOut"></div>
-      </section>
+          <div class="panel">
+            <div class="stage">
+              <div class="num">1</div>
+              <div class="body">
+                <h4>Accept or cancel</h4>
+                <p class="desc"><code>accept_agreement</code> must be called by the wallet set as <code>party_b</code>. <code>cancel_agreement</code> must be called by <code>party_a</code>, and only while still awaiting acceptance.</p>
+                <div class="stage-actions">
+                  <button class="primary" id="acceptBtn" type="button">Accept</button>
+                  <button class="secondary" id="cancelBtn" type="button">Cancel</button>
+                </div>
+                <div class="out" id="acceptOut"></div>
+              </div>
+            </div>
 
-      <!-- 03 RESOLVE -->
-      <section class="panel">
-        <h2><span class="idx">03</span> Resolve Agreement</h2>
-        <p class="desc">
-          Only callable at or after the resolution deadline, and before the
-          resolution window closes. Submit 2–6 candidate source URLs; every
-          domain committed at creation time must be represented.
-        </p>
-
-        <label for="resolveId">Agreement ID</label>
-        <input type="text" id="resolveId" placeholder="0">
-
-        <label for="sourceUrls">Source URLs <span style="text-transform:none;letter-spacing:0;">(one per line, 2–6 total)</span></label>
-        <textarea id="sourceUrls" rows="4" placeholder="one URL per line">https://www.xe.com/currencyconverter/convert/?Amount=1&amp;From=EUR&amp;To=USD
+            <div class="stage">
+              <div class="num">2</div>
+              <div class="body">
+                <h4>Resolve</h4>
+                <p class="desc">Only callable at or after the resolution deadline, and before the resolution window closes. Submit 2–6 candidate source URLs; every domain committed at creation time must be represented.</p>
+                <label for="sourceUrls">Source URLs <span style="text-transform:none;letter-spacing:0;">(one per line, 2–6 total)</span></label>
+                <textarea id="sourceUrls" rows="4" placeholder="one URL per line">https://www.xe.com/currencyconverter/convert/?Amount=1&amp;From=EUR&amp;To=USD
 https://www.oanda.com/currency-converter/en/?from=EUR&amp;to=USD&amp;amount=1</textarea>
+                <button class="primary" id="resolveBtn" type="button">Resolve</button>
+                <div class="out" id="resolveOut"></div>
+              </div>
+            </div>
 
-        <button class="primary" id="resolveBtn" type="button">Submit resolve_agreement</button>
-        <div class="out" id="resolveOut"></div>
+            <div class="stage">
+              <div class="num">3</div>
+              <div class="body">
+                <h4>Expire (if lapsed)</h4>
+                <p class="desc">Permissionless cleanup: never accepted before the deadline, or never resolved before the resolution window closed. Anyone can call this — no wallet role required.</p>
+                <div class="stage-actions">
+                  <button class="secondary" id="expireBtn" type="button">Expire</button>
+                </div>
+                <div class="out" id="expireOut"></div>
+              </div>
+            </div>
+          </div>
+        </div>
       </section>
 
-      <!-- 04 EXPIRE -->
-      <section class="panel">
-        <h2><span class="idx">04</span> Expire Agreement</h2>
-        <p class="desc">
-          Permissionless cleanup for lapsed agreements: never accepted before
-          the deadline, or never resolved before the resolution window closed.
-        </p>
+      <!-- ============ VIEW: LOOKUP ============ -->
+      <section class="view" id="view-lookup">
+        <div class="view-head">
+          <h2>Look up a case</h2>
+          <p>Pull the full auditable record for any agreement ID, straight from contract storage. No wallet needed.</p>
+        </div>
 
-        <label for="expireId">Agreement ID</label>
-        <input type="text" id="expireId" placeholder="0">
+        <div class="grid2">
+          <div class="panel">
+            <h3>Read agreement</h3>
+            <div class="row2" style="align-items:end;">
+              <div>
+                <label for="readId">Agreement ID</label>
+                <input type="text" id="readId" placeholder="0">
+              </div>
+              <div>
+                <button class="primary" id="readBtn" type="button" style="margin-top:0;">Fetch</button>
+              </div>
+            </div>
 
-        <button class="primary" id="expireBtn" type="button">Submit expire_agreement</button>
-        <div class="out" id="expireOut"></div>
+            <div id="verdictHero" class="verdict-hero" style="display:none;">
+              <p class="label">Final verdict</p>
+              <p class="value" id="verdictValue">—</p>
+              <p class="winner" id="verdictWinner"></p>
+            </div>
+
+            <div id="fieldsList"></div>
+
+            <label style="margin-top:18px;">Evidence records</label>
+            <div id="evidenceList"><p class="evidence-empty">Enter an agreement ID above and fetch it to see its record here.</p></div>
+
+            <div class="out" id="readOut"></div>
+          </div>
+
+          <div class="stack" style="max-width:none;">
+            <div class="panel">
+              <h3>Check a role</h3>
+              <p class="desc">Look up whether an address is <code>party_a</code>, <code>party_b</code>, or unrelated to a given agreement.</p>
+              <div class="row2">
+                <div>
+                  <label for="roleId">Agreement ID</label>
+                  <input type="text" id="roleId" placeholder="0">
+                </div>
+                <div>
+                  <label for="roleAddr">Address</label>
+                  <input type="text" id="roleAddr" placeholder="0x...">
+                </div>
+              </div>
+              <button class="primary" id="roleBtn" type="button">Check role</button>
+              <div class="out" id="roleOut"></div>
+            </div>
+
+            <div class="panel">
+              <h3>Total agreements</h3>
+              <p class="desc">Total number of agreements ever created on this contract instance.</p>
+              <button class="primary" id="totalBtn" type="button">Fetch count</button>
+              <div class="out" id="totalOut"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ VIEW: EXPLORER ============ -->
+      <section class="view" id="view-explorer">
+        <div class="view-head">
+          <h2>Explorer</h2>
+          <p>Every agreement this contract instance has ever handled — pending, open, resolved, expired, or cancelled — read live from on-chain storage. No wallet needed.</p>
+        </div>
+
+        <div class="panel">
+          <div id="explorerSummary" class="explorer-summary" style="display:none;"></div>
+
+          <div class="filter-row" id="explorerFilters" style="display:none;">
+            <button class="chip active" data-status="all" type="button">All</button>
+            <button class="chip" data-status="resolved" type="button">Resolved</button>
+            <button class="chip" data-status="open" type="button">Open</button>
+            <button class="chip" data-status="pending_acceptance" type="button">Pending</button>
+            <button class="chip" data-status="expired" type="button">Expired</button>
+            <button class="chip" data-status="cancelled" type="button">Cancelled</button>
+            <span style="flex:1"></span>
+            <button class="chip" id="explorerRefresh" type="button">↻ Refresh</button>
+          </div>
+
+          <div id="explorerBody">
+            <button class="primary" id="explorerLoadBtn" type="button" style="margin-top:0;">Load explorer</button>
+          </div>
+        </div>
       </section>
 
     </div>
-
-    <div class="col">
-
-      <!-- 05 READ AGREEMENT -->
-      <section class="panel">
-        <h2><span class="idx">05</span> Read Agreement</h2>
-        <p class="desc">Pull the full auditable record for any agreement ID, straight from contract storage. No wallet needed.</p>
-
-        <div class="row2" style="align-items:end;">
-          <div>
-            <label for="readId">Agreement ID</label>
-            <input type="text" id="readId" placeholder="0">
-          </div>
-          <div>
-            <button class="primary" id="readBtn" type="button" style="margin-top:0;">Fetch get_agreement</button>
-          </div>
-        </div>
-
-        <div id="verdictHero" class="verdict-hero" style="display:none;">
-          <p class="label">Final verdict</p>
-          <p class="value" id="verdictValue">—</p>
-          <p class="winner" id="verdictWinner"></p>
-        </div>
-
-        <div id="fieldsList"></div>
-
-        <label style="margin-top:18px;">Evidence records</label>
-        <div id="evidenceList"><p class="evidence-empty">No agreement loaded yet.</p></div>
-
-        <div class="out" id="readOut"></div>
-      </section>
-
-      <!-- 06 ROLE LOOKUP -->
-      <section class="panel">
-        <h2><span class="idx">06</span> Check Role</h2>
-        <p class="desc">Look up whether an address is <code>party_a</code>, <code>party_b</code>, or unrelated to a given agreement.</p>
-
-        <div class="row2">
-          <div>
-            <label for="roleId">Agreement ID</label>
-            <input type="text" id="roleId" placeholder="0">
-          </div>
-          <div>
-            <label for="roleAddr">Address</label>
-            <input type="text" id="roleAddr" placeholder="0x...">
-          </div>
-        </div>
-
-        <button class="primary" id="roleBtn" type="button">Fetch get_role</button>
-        <div class="out" id="roleOut"></div>
-      </section>
-
-      <!-- 07 TOTAL -->
-      <section class="panel">
-        <h2><span class="idx">07</span> Total Agreements</h2>
-        <p class="desc">Total number of agreements ever created on this contract instance.</p>
-
-        <button class="primary" id="totalBtn" type="button">Fetch total_agreements</button>
-        <div class="out" id="totalOut"></div>
-      </section>
-
-    </div>
-
-  </main>
+  </div>
 
   <footer>
-    ForexCrossRateOracle dApp — a minimal reference frontend built with <code>genlayer-js</code>.
+    ForexCrossRateOracle dApp — a reference frontend built with <code>genlayer-js</code>.
     Every dynamic value on this page is written with <code>textContent</code>/<code>createElement</code> only —
     <code>innerHTML</code> is never used, so data returned from the contract or fetched off-chain can never be
     interpreted as HTML/script by this page.
@@ -556,6 +728,8 @@ function makeEl(tag, opts, children){
   if (opts) {
     if (opts.className) node.className = opts.className;
     if (opts.text !== undefined) node.textContent = opts.text;
+    if (opts.id) node.id = opts.id;
+    if (opts.attrs) for (const k in opts.attrs) node.setAttribute(k, opts.attrs[k]);
   }
   if (children) {
     for (const child of children) node.appendChild(child);
@@ -642,21 +816,73 @@ function assertExecutionSucceeded(receipt){
 
 function requireClient(out){
   if (!client) {
-    showOut(out, 'Connect a wallet first (MetaMask or test session).', 'err');
+    showOut(out, 'Connect a wallet first — either "connect MetaMask" or "start test session," above.', 'err');
     return false;
   }
   return true;
 }
 
-// ---------- 01: Create Agreement ----------
-document.getElementById('createBtn').addEventListener('click', async () => {
+/**
+ * Wraps a button's click handler so the button disables itself and
+ * shows a busy label for the duration of the async action, then
+ * always restores its original label — even on error. Prevents
+ * double-submission and gives a visible loading state for every
+ * write call on the page.
+ */
+function withBusyButton(btn, busyLabel, fn){
+  const originalLabel = btn.textContent;
+  btn.addEventListener('click', async () => {
+    btn.disabled = true;
+    btn.textContent = busyLabel;
+    try {
+      await fn();
+    } finally {
+      btn.disabled = false;
+      btn.textContent = originalLabel;
+    }
+  });
+}
+
+// ------------------------------------------------------------------
+// View router — hash-based, single file, no build step. Keeps every
+// primary action (new agreement, manage, look up, explorer) on its
+// own screen instead of one long scrolling page.
+// ------------------------------------------------------------------
+const VIEWS = ['new', 'manage', 'lookup', 'explorer'];
+function switchView(name){
+  if (!VIEWS.includes(name)) name = 'new';
+  for (const v of VIEWS) {
+    document.getElementById('view-' + v).classList.toggle('active', v === name);
+  }
+  document.querySelectorAll('.navlink').forEach(el => el.classList.toggle('active', el.dataset.view === name));
+  document.querySelectorAll('.tabstrip button').forEach(el => el.classList.toggle('active', el.dataset.view === name));
+  if (location.hash.slice(1) !== name) location.hash = name;
+  if (name === 'explorer' && !explorerLoadedOnce) loadExplorer();
+}
+document.querySelectorAll('.navlink, .tabstrip button').forEach(el => {
+  el.addEventListener('click', () => switchView(el.dataset.view));
+});
+window.addEventListener('hashchange', () => switchView(location.hash.slice(1)));
+switchView(location.hash.slice(1) || 'new');
+
+/** Fills every "agreement ID" field across views at once, so a user
+ *  never has to re-type an ID they already have from another screen. */
+function propagateAgreementId(id){
+  for (const fieldId of ['manageId', 'readId']) {
+    document.getElementById(fieldId).value = String(id);
+  }
+}
+
+// ---------- New Agreement ----------
+const createBtn = document.getElementById('createBtn');
+withBusyButton(createBtn, 'Submitting…', async () => {
   const out = document.getElementById('createOut');
   if (!requireClient(out)) return;
 
   const partyB = document.getElementById('partyB').value.trim();
   const pair = document.getElementById('pair').value.trim();
-  const threshold = document.getElementById('threshold').value.trim();
   const comparison = document.getElementById('comparison').value;
+  const threshold = document.getElementById('threshold').value.trim();
   const description = document.getElementById('description').value.trim();
   const deadlineLocal = document.getElementById('deadline').value;
   const domains = parseCommaList(document.getElementById('requiredDomains').value);
@@ -669,14 +895,14 @@ document.getElementById('createBtn').addEventListener('click', async () => {
   const args = [partyB, pair, threshold, comparison, description, deadlineIso, domains];
 
   try {
-    showOut(out, 'Submitting transaction…');
+    showOut(out, 'Submitting transaction…', 'pending');
     const txHash = await client.writeContract({
       address: CONTRACT_ADDRESS,
       functionName: 'create_agreement',
       args,
       value: 0,
     });
-    showOut(out, `Transaction sent: ${txHash}\nWaiting for finalization…`);
+    showOut(out, `Transaction sent: ${txHash}\nWaiting for finalization…`, 'pending');
     const receipt = await client.waitForTransactionReceipt({
       hash: txHash, status: 'FINALIZED', interval: 4000, retries: 30,
     });
@@ -684,10 +910,8 @@ document.getElementById('createBtn').addEventListener('click', async () => {
     const agreementId = extractReturnValue(receipt);
     if (agreementId !== null && agreementId !== undefined) {
       showOut(out, `Agreement created. ID: ${agreementId}\n\nTx: ${txHash}`, 'ok');
-      document.getElementById('acceptId').value = String(agreementId);
-      document.getElementById('resolveId').value = String(agreementId);
-      document.getElementById('expireId').value = String(agreementId);
-      document.getElementById('readId').value = String(agreementId);
+      propagateAgreementId(agreementId);
+      explorerLoadedOnce = false; // next Explorer visit picks up the new case
     } else {
       showOut(out, `Finalized, but the agreement ID could not be auto-detected.\nCheck the explorer.\n\nTx: ${txHash}`, 'ok');
     }
@@ -696,18 +920,19 @@ document.getElementById('createBtn').addEventListener('click', async () => {
   }
 });
 
-// ---------- 02: Accept / Cancel Agreement ----------
-document.getElementById('acceptBtn').addEventListener('click', async () => {
+// ---------- Manage: Accept / Cancel ----------
+const acceptBtn = document.getElementById('acceptBtn');
+withBusyButton(acceptBtn, 'Submitting…', async () => {
   const out = document.getElementById('acceptOut');
   if (!requireClient(out)) return;
-  const id = document.getElementById('acceptId').value.trim();
-  if (!id) { showOut(out, 'Enter an agreement ID.', 'err'); return; }
+  const id = document.getElementById('manageId').value.trim();
+  if (!id) { showOut(out, 'Enter an agreement ID above.', 'err'); return; }
   try {
-    showOut(out, 'Submitting transaction…');
+    showOut(out, 'Submitting transaction…', 'pending');
     const txHash = await client.writeContract({
       address: CONTRACT_ADDRESS, functionName: 'accept_agreement', args: [id], value: 0,
     });
-    showOut(out, `Transaction sent: ${txHash}\nWaiting for finalization…`);
+    showOut(out, `Transaction sent: ${txHash}\nWaiting for finalization…`, 'pending');
     const receipt = await client.waitForTransactionReceipt({
       hash: txHash, status: 'FINALIZED', interval: 4000, retries: 30,
     });
@@ -719,17 +944,18 @@ document.getElementById('acceptBtn').addEventListener('click', async () => {
   }
 });
 
-document.getElementById('cancelBtn').addEventListener('click', async () => {
+const cancelBtn = document.getElementById('cancelBtn');
+withBusyButton(cancelBtn, 'Submitting…', async () => {
   const out = document.getElementById('acceptOut');
   if (!requireClient(out)) return;
-  const id = document.getElementById('acceptId').value.trim();
-  if (!id) { showOut(out, 'Enter an agreement ID.', 'err'); return; }
+  const id = document.getElementById('manageId').value.trim();
+  if (!id) { showOut(out, 'Enter an agreement ID above.', 'err'); return; }
   try {
-    showOut(out, 'Submitting transaction…');
+    showOut(out, 'Submitting transaction…', 'pending');
     const txHash = await client.writeContract({
       address: CONTRACT_ADDRESS, functionName: 'cancel_agreement', args: [id], value: 0,
     });
-    showOut(out, `Transaction sent: ${txHash}\nWaiting for finalization…`);
+    showOut(out, `Transaction sent: ${txHash}\nWaiting for finalization…`, 'pending');
     const receipt = await client.waitForTransactionReceipt({
       hash: txHash, status: 'FINALIZED', interval: 4000, retries: 30,
     });
@@ -741,26 +967,27 @@ document.getElementById('cancelBtn').addEventListener('click', async () => {
   }
 });
 
-// ---------- 03: Resolve Agreement ----------
-document.getElementById('resolveBtn').addEventListener('click', async () => {
+// ---------- Manage: Resolve ----------
+const resolveBtn = document.getElementById('resolveBtn');
+withBusyButton(resolveBtn, 'Resolving…', async () => {
   const out = document.getElementById('resolveOut');
   if (!requireClient(out)) return;
 
-  const id = document.getElementById('resolveId').value.trim();
+  const id = document.getElementById('manageId').value.trim();
   const urls = parseLineList(document.getElementById('sourceUrls').value);
 
-  if (!id) { showOut(out, 'Enter an agreement ID.', 'err'); return; }
+  if (!id) { showOut(out, 'Enter an agreement ID above.', 'err'); return; }
   if (urls.length < 2 || urls.length > 6) {
     showOut(out, 'Provide 2–6 source URLs (one per line).', 'err');
     return;
   }
 
   try {
-    showOut(out, 'Submitting transaction — this triggers live fetch + LLM extraction under validator consensus, it can take a while…');
+    showOut(out, 'Submitting transaction — this triggers live fetch + LLM extraction under validator consensus, it can take a while…', 'pending');
     const txHash = await client.writeContract({
       address: CONTRACT_ADDRESS, functionName: 'resolve_agreement', args: [id, urls], value: 0,
     });
-    showOut(out, `Transaction sent: ${txHash}\nWaiting for finalization — this runs a real fetch + LLM extraction per source, so it can take a few minutes…`);
+    showOut(out, `Transaction sent: ${txHash}\nWaiting for finalization — this runs a real fetch + LLM extraction per source, so it can take a few minutes…`, 'pending');
     const receipt = await client.waitForTransactionReceipt({
       hash: txHash, status: 'FINALIZED', interval: 5000, retries: 90,
     });
@@ -768,64 +995,68 @@ document.getElementById('resolveBtn').addEventListener('click', async () => {
     const result = extractReturnValue(receipt);
     showOut(out, `Resolved.\n\nTx: ${txHash}\n\n${result !== null ? JSON.stringify(result, null, 2) : JSON.stringify(receipt, null, 2)}`, 'ok');
     document.getElementById('readId').value = id;
-    fetchAgreement(id);
+    explorerLoadedOnce = false;
   } catch (err) {
     const message = err?.message || String(err);
     if (/timed out/i.test(message)) {
-      showOut(out, `${message}\n\nThis is just the browser giving up on waiting — the transaction may still finalize on-chain. Wait, then use "Read Agreement" with the same ID.`, 'err');
+      showOut(out, `${message}\n\nThis is just the browser giving up on waiting — the transaction may still finalize on-chain. Wait, then look this ID up on the Look Up screen.`, 'err');
     } else {
       showOut(out, 'Error: ' + message, 'err');
     }
   }
 });
 
-// ---------- 04: Expire Agreement ----------
-document.getElementById('expireBtn').addEventListener('click', async () => {
+// ---------- Manage: Expire ----------
+const expireBtn = document.getElementById('expireBtn');
+withBusyButton(expireBtn, 'Submitting…', async () => {
   const out = document.getElementById('expireOut');
   if (!requireClient(out)) return;
-  const id = document.getElementById('expireId').value.trim();
-  if (!id) { showOut(out, 'Enter an agreement ID.', 'err'); return; }
+  const id = document.getElementById('manageId').value.trim();
+  if (!id) { showOut(out, 'Enter an agreement ID above.', 'err'); return; }
   try {
-    showOut(out, 'Submitting transaction…');
+    showOut(out, 'Submitting transaction…', 'pending');
     const txHash = await client.writeContract({
       address: CONTRACT_ADDRESS, functionName: 'expire_agreement', args: [id], value: 0,
     });
-    showOut(out, `Transaction sent: ${txHash}\nWaiting for finalization…`);
+    showOut(out, `Transaction sent: ${txHash}\nWaiting for finalization…`, 'pending');
     const receipt = await client.waitForTransactionReceipt({
       hash: txHash, status: 'FINALIZED', interval: 4000, retries: 30,
     });
     assertExecutionSucceeded(receipt);
     const result = extractReturnValue(receipt);
     showOut(out, `Expired.\n\nTx: ${txHash}\n\n${result !== null ? JSON.stringify(result, null, 2) : 'See explorer.'}`, 'ok');
+    explorerLoadedOnce = false;
   } catch (err) {
     showOut(out, 'Error: ' + (err?.message || String(err)), 'err');
   }
 });
 
-// ---------- 05: Read Agreement ----------
+// ---------- Look up: Read Agreement ----------
 document.getElementById('readBtn').addEventListener('click', () => {
   const id = document.getElementById('readId').value.trim();
-  if (!id) return;
+  if (!id) { showOut(document.getElementById('readOut'), 'Enter an agreement ID.', 'err'); return; }
   fetchAgreement(id);
 });
 
 async function fetchAgreement(id){
   const out = document.getElementById('readOut');
   try {
-    showOut(out, 'Reading contract state…');
+    showOut(out, 'Reading contract state…', 'pending');
     const raw = await readClient.readContract({
       address: CONTRACT_ADDRESS, functionName: 'get_agreement', args: [id],
     });
     const agreement = typeof raw === 'string' ? JSON.parse(raw) : raw;
     showOut(out, JSON.stringify(agreement, null, 2), 'ok');
     renderAgreement(agreement);
+    return agreement;
   } catch (err) {
     showOut(out, 'Error: ' + (err?.message || String(err)), 'err');
     const evidenceList = document.getElementById('evidenceList');
     clearChildren(evidenceList);
-    evidenceList.appendChild(makeEl('p', { className: 'evidence-empty', text: 'Could not load agreement.' }));
+    evidenceList.appendChild(makeEl('p', { className: 'evidence-empty', text: 'Could not load that agreement — check the ID and try again.' }));
     document.getElementById('verdictHero').style.display = 'none';
     clearChildren(document.getElementById('fieldsList'));
+    return null;
   }
 }
 
@@ -889,7 +1120,7 @@ function renderAgreement(agreement){
   clearChildren(evidenceList);
   const records = agreement.records || [];
   if (!records.length) {
-    evidenceList.appendChild(makeEl('p', { className: 'evidence-empty', text: 'No resolution evidence yet — call resolve_agreement.' }));
+    evidenceList.appendChild(makeEl('p', { className: 'evidence-empty', text: 'No resolution evidence yet — resolve this agreement to see it here.' }));
     return;
   }
   for (const r of records) {
@@ -897,26 +1128,23 @@ function renderAgreement(agreement){
     const flagSpan = makeEl('span', { className: 'flag', text: r.quality_flag || '' });
     const cmp = r.comparison || 'Unclear';
     const cmpBadge = makeEl('span', { className: 'badge badge-cmp-' + cmp, text: cmp });
-    
-    // Add dissenting badge if is_dissenting is true
     const rowElements = [domainSpan, flagSpan, cmpBadge];
     if (r.is_dissenting === true) {
       const dissentBadge = makeEl('span', { className: 'dissenting-badge', text: '🚩 DISSENTING' });
       rowElements.push(dissentBadge);
     }
-    
     evidenceList.appendChild(makeEl('div', { className: 'evidence-row' }, rowElements));
   }
 }
 
-// ---------- 06: Check Role ----------
+// ---------- Look up: Check Role ----------
 document.getElementById('roleBtn').addEventListener('click', async () => {
   const out = document.getElementById('roleOut');
   const id = document.getElementById('roleId').value.trim();
   const addr = document.getElementById('roleAddr').value.trim();
   if (!id || !addr) { showOut(out, 'Enter both an agreement ID and an address.', 'err'); return; }
   try {
-    showOut(out, 'Reading contract state…');
+    showOut(out, 'Reading contract state…', 'pending');
     const role = await readClient.readContract({
       address: CONTRACT_ADDRESS, functionName: 'get_role', args: [id, addr],
     });
@@ -926,11 +1154,11 @@ document.getElementById('roleBtn').addEventListener('click', async () => {
   }
 });
 
-// ---------- 07: Total Agreements ----------
+// ---------- Look up: Total Agreements ----------
 document.getElementById('totalBtn').addEventListener('click', async () => {
   const out = document.getElementById('totalOut');
   try {
-    showOut(out, 'Reading contract state…');
+    showOut(out, 'Reading contract state…', 'pending');
     const total = await readClient.readContract({
       address: CONTRACT_ADDRESS, functionName: 'total_agreements', args: [],
     });
@@ -939,6 +1167,180 @@ document.getElementById('totalBtn').addEventListener('click', async () => {
     showOut(out, 'Error: ' + (err?.message || String(err)), 'err');
   }
 });
+
+// ------------------------------------------------------------------
+// Explorer — the contract has no indexer, so this reads
+// total_agreements() once, then reads get_agreement(i) for every ID
+// in small concurrent batches, and renders the results as a
+// filterable table. This is the project's transparency surface:
+// anyone can see every case the desk has ever handled without
+// needing a wallet.
+// ------------------------------------------------------------------
+let explorerLoadedOnce = false;
+let explorerRows = [];
+let explorerFilter = 'all';
+
+document.getElementById('explorerLoadBtn').addEventListener('click', loadExplorer);
+document.getElementById('explorerRefresh').addEventListener('click', () => { explorerLoadedOnce = false; loadExplorer(); });
+document.querySelectorAll('#explorerFilters .chip[data-status]').forEach(chip => {
+  chip.addEventListener('click', () => {
+    explorerFilter = chip.dataset.status;
+    document.querySelectorAll('#explorerFilters .chip[data-status]').forEach(c => c.classList.toggle('active', c === chip));
+    renderExplorerTable();
+  });
+});
+
+async function loadExplorer(){
+  const body = document.getElementById('explorerBody');
+  const summary = document.getElementById('explorerSummary');
+  const filters = document.getElementById('explorerFilters');
+  clearChildren(body);
+  body.appendChild(makeEl('div', { className: 'loading-row' }, [
+    makeEl('div', { className: 'spinner' }),
+    makeEl('span', { text: 'Reading total_agreements() …' }),
+  ]));
+
+  let total;
+  try {
+    total = await readClient.readContract({ address: CONTRACT_ADDRESS, functionName: 'total_agreements', args: [] });
+    total = Number(total);
+  } catch (err) {
+    clearChildren(body);
+    body.appendChild(makeEl('p', { className: 'evidence-empty', text: 'Could not reach the contract: ' + (err?.message || String(err)) }));
+    return;
+  }
+
+  if (!total || total <= 0) {
+    summary.style.display = 'none';
+    filters.style.display = 'none';
+    clearChildren(body);
+    const empty = makeEl('div', { className: 'explorer-empty' }, [
+      makeEl('h4', { text: 'No agreements yet' }),
+      makeEl('p', { text: 'Once the first agreement is created, it will show up here for anyone to inspect.' }),
+    ]);
+    const cta = makeEl('a', { className: 'cta', text: 'Start a new agreement →' });
+    cta.addEventListener('click', () => switchView('new'));
+    empty.appendChild(cta);
+    body.appendChild(empty);
+    explorerLoadedOnce = true;
+    return;
+  }
+
+  clearChildren(body);
+  body.appendChild(makeEl('div', { className: 'loading-row' }, [
+    makeEl('div', { className: 'spinner' }),
+    makeEl('span', { id: 'explorerProgress', text: `Loading 0 / ${total} cases…` }),
+  ]));
+
+  const ids = Array.from({ length: total }, (_, i) => i);
+  const results = new Array(total).fill(null);
+  const BATCH = 6;
+  let loaded = 0;
+  for (let start = 0; start < ids.length; start += BATCH) {
+    const batch = ids.slice(start, start + BATCH);
+    await Promise.all(batch.map(async (id) => {
+      try {
+        const raw = await readClient.readContract({ address: CONTRACT_ADDRESS, functionName: 'get_agreement', args: [id] });
+        const agreement = typeof raw === 'string' ? JSON.parse(raw) : raw;
+        results[id] = { id, ...agreement };
+      } catch (err) {
+        results[id] = { id, status: 'unreadable', _error: err?.message || String(err) };
+      }
+      loaded += 1;
+      const progressEl = document.getElementById('explorerProgress');
+      if (progressEl) progressEl.textContent = `Loading ${loaded} / ${total} cases…`;
+    }));
+  }
+
+  explorerRows = results.filter(Boolean).sort((a, b) => b.id - a.id); // newest first
+  explorerLoadedOnce = true;
+  renderExplorerSummary();
+  renderExplorerTable();
+}
+
+function renderExplorerSummary(){
+  const summary = document.getElementById('explorerSummary');
+  const filters = document.getElementById('explorerFilters');
+  const counts = { resolved: 0, open: 0, pending_acceptance: 0, expired: 0, cancelled: 0 };
+  for (const row of explorerRows) {
+    if (counts[row.status] !== undefined) counts[row.status] += 1;
+  }
+  clearChildren(summary);
+  const cells = [
+    ['Total', explorerRows.length],
+    ['Resolved', counts.resolved],
+    ['Open', counts.open],
+    ['Pending', counts.pending_acceptance],
+    ['Expired', counts.expired],
+    ['Cancelled', counts.cancelled],
+  ];
+  for (const [label, value] of cells) {
+    summary.appendChild(makeEl('div', {}, [
+      makeEl('b', { text: String(value) }),
+      makeEl('span', { text: label }),
+    ]));
+  }
+  summary.style.display = 'flex';
+  filters.style.display = 'flex';
+}
+
+function renderExplorerTable(){
+  const body = document.getElementById('explorerBody');
+  clearChildren(body);
+
+  const rows = explorerFilter === 'all'
+    ? explorerRows
+    : explorerRows.filter(r => r.status === explorerFilter);
+
+  if (!rows.length) {
+    body.appendChild(makeEl('p', { className: 'evidence-empty', text: 'No cases match this filter.' }));
+    return;
+  }
+
+  const wrap = makeEl('div', { className: 'explorer-scroll' });
+  const table = makeEl('table', { className: 'explorer-table' });
+  const thead = makeEl('thead', {}, [
+    makeEl('tr', {}, [
+      makeEl('th', { text: 'ID' }),
+      makeEl('th', { text: 'Status' }),
+      makeEl('th', { text: 'Pair' }),
+      makeEl('th', { text: 'Threshold' }),
+      makeEl('th', { text: 'Verdict' }),
+      makeEl('th', { text: 'Winner' }),
+      makeEl('th', { text: 'Deadline' }),
+    ]),
+  ]);
+  const tbody = makeEl('tbody');
+
+  for (const row of rows) {
+    const statusBadge = makeEl('span', { className: 'badge badge-status-' + (row.status || ''), text: row.status || '—' });
+    const verdictBadge = row.final_verdict
+      ? makeEl('span', { className: 'badge badge-cmp-' + row.final_verdict, text: row.final_verdict })
+      : makeEl('span', { className: 'v', text: '—' });
+    const winnerText = (row.winner && row.winner !== 'unresolved') ? row.winner : '—';
+
+    const tr = makeEl('tr', { className: 'rowbtn' }, [
+      makeEl('td', { className: 'num', text: '#' + row.id }),
+      makeEl('td', {}, [statusBadge]),
+      makeEl('td', { className: 'mono', text: row.currency_pair || '—' }),
+      makeEl('td', { className: 'mono', text: row.threshold_rate || '—' }),
+      makeEl('td', {}, [verdictBadge]),
+      makeEl('td', { className: 'mono', text: winnerText === '—' ? winnerText : (winnerText.slice(0, 6) + '…' + winnerText.slice(-4)) }),
+      makeEl('td', { className: 'mono', text: row.resolution_deadline ? row.resolution_deadline.replace('T', ' ').replace('Z', ' UTC') : '—' }),
+    ]);
+    tr.addEventListener('click', () => {
+      document.getElementById('readId').value = String(row.id);
+      switchView('lookup');
+      fetchAgreement(row.id);
+    });
+    tbody.appendChild(tr);
+  }
+
+  table.appendChild(thead);
+  table.appendChild(tbody);
+  wrap.appendChild(table);
+  body.appendChild(wrap);
+}
 </script>
 
 </body>
