@@ -160,10 +160,16 @@ Every method was exercised against the real, deployed contract on GenLayer Studi
 | Frontend: get_agreement read + DOM-safe render | ✅ rendered correctly — full JSON + fields verified on v1.3.0 |
 | Frontend: get_role, total_agreements | ✅ get_role returned "party_b" correctly; total_agreements returned accurate count, verified on v1.3.0 |
 | Frontend: rollback vs success detection | ✅ a wrong-wallet accept_agreement call correctly surfaces the real rollback error instead of a false "Accepted.", verified on v1.4.1 |
-| Frontend: Explorer loads and renders every agreement | ✅ total_agreements() + per-ID get_agreement() reads render as a filterable table with correct status/verdict badges |
+| Frontend: Explorer loads and renders every agreement | ✅ live-verified on v1.5.4 — all 7 agreements loaded with correct status/pair/threshold/verdict/deadline in the table |
+| Frontend: Explorer status filters | ✅ live-verified — Pending (5), Open (2), and empty-filter states (Resolved/Expired/Cancelled all showing "No cases match this filter") all rendered correctly |
 | Frontend: Explorer empty state | ✅ shows a "No agreements yet" state with a link into New Agreement when total_agreements() is 0 |
-| Frontend: Explorer row click → Look Up | ✅ clicking a row switches view and pre-loads that agreement ID |
-| Frontend: static analysis (v1.5.0) | ✅ every `getElementById` target confirmed present, every button confirmed wired to a listener, JS validated with `node --check`, HTML tag balance validated with a parser |
+| Frontend: Explorer row click → Look Up | ✅ live-verified on v1.5.4 — clicking a resolved-status row and a pending-status row both switch view and correctly fetch/render that exact agreement's full JSON |
+| Frontend: static analysis (v1.5.0+) | ✅ every `getElementById` target confirmed present, every button confirmed wired to a listener, JS validated with `node --check`, HTML tag balance validated with a parser |
+
+#### Real bugs found and fixed during this live testing pass (not just static analysis)
+- **Type coercion bug (v1.5.3/v1.5.4):** `get_agreement(agreement_id: str)` requires a string argument, but the Explorer's ID loop (`Array.from({length}, (_, i) => i)`) generated plain JS numbers, and the row-click handler forwarded that raw number too. Every Explorer read failed deterministically with a generic RPC "Missing or invalid parameters" error — indistinguishable at first glance from a transient network issue. Fixed by coercing to `String(id)` at both call sites, plus a defensive coercion inside `fetchAgreement` itself so no future caller can reintroduce it.
+- **Resilience improvement (v1.5.2):** added a `readContractWithRetry` wrapper (used by every read call on the page) and reduced Explorer's fetch concurrency from 6 simultaneous requests to batches of 3 with a short pause between batches, since a burst of concurrent reads was one of the two contributing factors behind the intermittent read failures above.
+- **Richer error surfacing (v1.5.1):** replaced bare `err.message` display with a `formatError()` helper that unwraps viem/genlayer-js's `shortMessage`, `details`, `metaMessages`, and chained `.cause` errors — this is what made the type-coercion bug diagnosable from the page itself instead of requiring browser devtools.
 
 Not exercised live from the frontend UI: a same-browser, two-tab accept_agreement/cancel_agreement round trip. Mobile browsers routinely reclaim memory from backgrounded tabs by reloading them, and since a "test session" wallet lives only in that page load's JavaScript memory, a background reload silently discards it — this is a mobile browser memory-management behavior, not a defect in the contract or frontend. The underlying logic was already confirmed both on live GenLayer Studio (table above) and in the offline suite.
 
