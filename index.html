@@ -103,6 +103,14 @@
     grid-template-columns:200px 1fr;
     gap:28px;
     align-items:start;
+    overflow-x:hidden;
+  }
+  .shell .content{
+    /* Without this, a CSS Grid column refuses to shrink below the
+       intrinsic width of its content (here, the Explorer table),
+       forcing the ENTIRE PAGE to scroll horizontally on mobile
+       instead of just the table's own .explorer-scroll wrapper. */
+    min-width:0;
   }
   nav.rail{
     position:sticky; top:20px;
@@ -135,10 +143,23 @@
   nav.rail .navlink.active .sub{ color:var(--text-dim); }
 
   /* mobile tab strip */
+  .tabstrip-wrap{ display:none; }
   .tabstrip{ display:none; }
   @media (max-width:860px){
     .shell{ grid-template-columns:1fr; }
     nav.rail{ display:none; }
+    .tabstrip-wrap{
+      display:block;
+      position:relative;
+    }
+    .tabstrip-wrap::after{
+      content:'';
+      position:absolute;
+      top:0; right:0; bottom:16px;
+      width:32px;
+      background:linear-gradient(to right, transparent, var(--bg-deep));
+      pointer-events:none;
+    }
     .tabstrip{
       display:flex; gap:6px; overflow-x:auto;
       padding:0 20px 16px; margin-top:4px;
@@ -427,11 +448,13 @@
     </p>
   </header>
 
-  <div class="tabstrip" id="tabstrip">
-    <button data-view="new" class="active" type="button">New agreement</button>
-    <button data-view="manage" type="button">Manage</button>
-    <button data-view="lookup" type="button">Look up</button>
-    <button data-view="explorer" type="button">Explorer</button>
+  <div class="tabstrip-wrap">
+    <div class="tabstrip" id="tabstrip">
+      <button data-view="new" class="active" type="button">New agreement</button>
+      <button data-view="manage" type="button">Manage</button>
+      <button data-view="lookup" type="button">Look up</button>
+      <button data-view="explorer" type="button">Explorer</button>
+    </div>
   </div>
 
   <div class="shell">
