@@ -1096,6 +1096,10 @@ document.getElementById('readBtn').addEventListener('click', () => {
 
 async function fetchAgreement(id){
   const out = document.getElementById('readOut');
+  // Defensive: the contract's get_agreement(agreement_id: str) requires
+  // a string argument. Coercing here means every caller is safe even
+  // if a future call site accidentally passes a number again.
+  id = String(id);
   try {
     showOut(out, 'Reading contract state…', 'pending');
     const raw = await readContractWithRetry('get_agreement', [id]);
@@ -1397,7 +1401,7 @@ function renderExplorerTable(){
     tr.addEventListener('click', () => {
       document.getElementById('readId').value = String(row.id);
       switchView('lookup');
-      fetchAgreement(row.id);
+      fetchAgreement(String(row.id));
     });
     tbody.appendChild(tr);
   }
