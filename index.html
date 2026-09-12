@@ -1297,7 +1297,15 @@ async function loadExplorer(){
     const batch = ids.slice(start, start + BATCH);
     await Promise.all(batch.map(async (id) => {
       try {
-        const raw = await readContractWithRetry('get_agreement', [id]);
+        // The contract's get_agreement(agreement_id: str) expects a
+        // STRING argument. ids here are plain JS numbers (array
+        // indices) — passing a raw number instead of a string caused
+        // every Explorer read to fail deterministically, regardless
+        // of retries, while manually-typed string IDs on the Look Up
+        // screen worked. String(id) is the actual fix; the retry
+        // wrapper below just adds resilience against genuinely
+        // transient RPC hiccups on top of that.
+        const raw = await readContractWithRetry('get_agreement', [String(id)]);
         const agreement = typeof raw === 'string' ? JSON.parse(raw) : raw;
         results[id] = { id, ...agreement };
       } catch (err) {
