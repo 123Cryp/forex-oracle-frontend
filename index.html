@@ -848,6 +848,28 @@ function assertExecutionSucceeded(receipt){
   }
 }
 
+function sleep(ms){ return new Promise(resolve => setTimeout(resolve, ms)); }
+
+/**
+ * Wraps a read-only contract call with up to 2 retries (short,
+ * increasing delay) before giving up. The public Studio RPC endpoint
+ * has been observed to occasionally return a generic "Missing or
+ * invalid parameters" error under load — this makes every read on
+ * the page resilient to that kind of transient failure instead of
+ * surfacing it to the user on the first blip.
+ */
+async function readContractWithRetry(functionName, args, attempt = 0){
+  try {
+    return await readClient.readContract({ address: CONTRACT_ADDRESS, functionName, args });
+  } catch (err) {
+    if (attempt < 2) {
+      await sleep(400 * (attempt + 1));
+      return readContractWithRetry(functionName, args, attempt + 1);
+    }
+    throw err;
+  }
+}
+
 function requireClient(out){
   if (!client) {
     showOut(out, 'Connect a wallet first — either "connect MetaMask" or "start test session," above.', 'err');
@@ -1076,9 +1098,7 @@ async function fetchAgreement(id){
   const out = document.getElementById('readOut');
   try {
     showOut(out, 'Reading contract state…', 'pending');
-    const raw = await readClient.readContract({
-      address: CONTRACT_ADDRESS, functionName: 'get_agreement', args: [id],
-    });
+    const raw = await readContractWithRetry('get_agreement', [id]);
     const agreement = typeof raw === 'string' ? JSON.parse(raw) : raw;
     showOut(out, JSON.stringify(agreement, null, 2), 'ok');
     renderAgreement(agreement);
@@ -1179,9 +1199,7 @@ document.getElementById('roleBtn').addEventListener('click', async () => {
   if (!id || !addr) { showOut(out, 'Enter both an agreement ID and an address.', 'err'); return; }
   try {
     showOut(out, 'Reading contract state…', 'pending');
-    const role = await readClient.readContract({
-      address: CONTRACT_ADDRESS, functionName: 'get_role', args: [id, addr],
-    });
+    const role = await readContractWithRetry('get_role', [id, addr]);
     showOut(out, String(role), 'ok');
   } catch (err) {
     showOut(out, 'Error: ' + formatError(err), 'err');
@@ -1193,9 +1211,7 @@ document.getElementById('totalBtn').addEventListener('click', async () => {
   const out = document.getElementById('totalOut');
   try {
     showOut(out, 'Reading contract state…', 'pending');
-    const total = await readClient.readContract({
-      address: CONTRACT_ADDRESS, functionName: 'total_agreements', args: [],
-    });
+    const total = await readContractWithRetry('total_agreements', []);
     showOut(out, String(total), 'ok');
   } catch (err) {
     showOut(out, 'Error: ' + formatError(err), 'err');
@@ -1236,7 +1252,7 @@ async function loadExplorer(){
 
   let total;
   try {
-    total = await readClient.readContract({ address: CONTRACT_ADDRESS, functionName: 'total_agreements', args: [] });
+    total = await readContractWithRetry('total_agreements', []);
     total = Number(total);
   } catch (err) {
     clearChildren(body);
@@ -1268,22 +1284,30 @@ async function loadExplorer(){
 
   const ids = Array.from({ length: total }, (_, i) => i);
   const results = new Array(total).fill(null);
-  const BATCH = 6;
+  // A small batch size with a short pause between batches avoids
+  // tripping rate limits on the public Studio RPC endpoint, which
+  // was observed to return a generic "Missing or invalid parameters"
+  // error under a burst of ~6+ simultaneous read calls. Each
+  // individual read also retries transiently via readContractWithRetry.
+  const BATCH = 3;
+  const BATCH_PAUSE_MS = 250;
   let loaded = 0;
+
   for (let start = 0; start < ids.length; start += BATCH) {
     const batch = ids.slice(start, start + BATCH);
     await Promise.all(batch.map(async (id) => {
       try {
-        const raw = await readClient.readContract({ address: CONTRACT_ADDRESS, functionName: 'get_agreement', args: [id] });
+        const raw = await readContractWithRetry('get_agreement', [id]);
         const agreement = typeof raw === 'string' ? JSON.parse(raw) : raw;
         results[id] = { id, ...agreement };
       } catch (err) {
-        results[id] = { id, status: 'unreadable', _error: err?.message || String(err) };
+        results[id] = { id, status: 'unreadable', _error: formatError(err) };
       }
       loaded += 1;
       const progressEl = document.getElementById('explorerProgress');
       if (progressEl) progressEl.textContent = `Loading ${loaded} / ${total} cases…`;
     }));
+    if (start + BATCH < ids.length) await sleep(BATCH_PAUSE_MS);
   }
 
   explorerRows = results.filter(Boolean).sort((a, b) => b.id - a.id); // newest first
