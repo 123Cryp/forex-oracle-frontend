@@ -743,6 +743,40 @@ function showOut(el, text, kind){
   el.textContent = text; // safe: textContent never interprets markup
 }
 
+/**
+ * viem/genlayer-js errors carry far more diagnostic detail than
+ * err.message alone — shortMessage, a details string, metaMessages
+ * (often including the exact RPC request body), and a chain of
+ * .cause errors. This walks all of that and renders it as plain
+ * text, so failures are actually debuggable from the page itself
+ * instead of requiring browser devtools.
+ */
+function formatError(err){
+  if (!err) return 'Unknown error';
+  const parts = [];
+  if (err.shortMessage && err.shortMessage !== err.message) parts.push(err.shortMessage);
+  else if (err.message) parts.push(err.message);
+  else parts.push(String(err));
+  if (err.details) parts.push('Details: ' + err.details);
+  if (Array.isArray(err.metaMessages) && err.metaMessages.length) {
+    parts.push('---');
+    parts.push(err.metaMessages.join('\n'));
+  }
+  let cause = err.cause;
+  let depth = 0;
+  while (cause && depth < 5) {
+    parts.push('---');
+    parts.push('Caused by: ' + (cause.shortMessage || cause.message || String(cause)));
+    if (cause.details) parts.push('Details: ' + cause.details);
+    if (Array.isArray(cause.metaMessages) && cause.metaMessages.length) {
+      parts.push(cause.metaMessages.join('\n'));
+    }
+    cause = cause.cause;
+    depth += 1;
+  }
+  return parts.join('\n');
+}
+
 function parseCommaList(raw){
   return raw.split(',').map(s => s.trim()).filter(Boolean);
 }
@@ -916,7 +950,7 @@ withBusyButton(createBtn, 'Submitting…', async () => {
       showOut(out, `Finalized, but the agreement ID could not be auto-detected.\nCheck the explorer.\n\nTx: ${txHash}`, 'ok');
     }
   } catch (err) {
-    showOut(out, 'Error: ' + (err?.message || String(err)), 'err');
+    showOut(out, 'Error: ' + formatError(err), 'err');
   }
 });
 
@@ -940,7 +974,7 @@ withBusyButton(acceptBtn, 'Submitting…', async () => {
     const result = extractReturnValue(receipt);
     showOut(out, `Accepted.\n\nTx: ${txHash}\n\n${result !== null ? JSON.stringify(result, null, 2) : 'See explorer.'}`, 'ok');
   } catch (err) {
-    showOut(out, 'Error: ' + (err?.message || String(err)), 'err');
+    showOut(out, 'Error: ' + formatError(err), 'err');
   }
 });
 
@@ -963,7 +997,7 @@ withBusyButton(cancelBtn, 'Submitting…', async () => {
     const result = extractReturnValue(receipt);
     showOut(out, `Cancelled.\n\nTx: ${txHash}\n\n${result !== null ? JSON.stringify(result, null, 2) : 'See explorer.'}`, 'ok');
   } catch (err) {
-    showOut(out, 'Error: ' + (err?.message || String(err)), 'err');
+    showOut(out, 'Error: ' + formatError(err), 'err');
   }
 });
 
@@ -1001,7 +1035,7 @@ withBusyButton(resolveBtn, 'Resolving…', async () => {
     if (/timed out/i.test(message)) {
       showOut(out, `${message}\n\nThis is just the browser giving up on waiting — the transaction may still finalize on-chain. Wait, then look this ID up on the Look Up screen.`, 'err');
     } else {
-      showOut(out, 'Error: ' + message, 'err');
+      showOut(out, 'Error: ' + formatError(err), 'err');
     }
   }
 });
@@ -1027,7 +1061,7 @@ withBusyButton(expireBtn, 'Submitting…', async () => {
     showOut(out, `Expired.\n\nTx: ${txHash}\n\n${result !== null ? JSON.stringify(result, null, 2) : 'See explorer.'}`, 'ok');
     explorerLoadedOnce = false;
   } catch (err) {
-    showOut(out, 'Error: ' + (err?.message || String(err)), 'err');
+    showOut(out, 'Error: ' + formatError(err), 'err');
   }
 });
 
@@ -1050,7 +1084,7 @@ async function fetchAgreement(id){
     renderAgreement(agreement);
     return agreement;
   } catch (err) {
-    showOut(out, 'Error: ' + (err?.message || String(err)), 'err');
+    showOut(out, 'Error: ' + formatError(err), 'err');
     const evidenceList = document.getElementById('evidenceList');
     clearChildren(evidenceList);
     evidenceList.appendChild(makeEl('p', { className: 'evidence-empty', text: 'Could not load that agreement — check the ID and try again.' }));
@@ -1150,7 +1184,7 @@ document.getElementById('roleBtn').addEventListener('click', async () => {
     });
     showOut(out, String(role), 'ok');
   } catch (err) {
-    showOut(out, 'Error: ' + (err?.message || String(err)), 'err');
+    showOut(out, 'Error: ' + formatError(err), 'err');
   }
 });
 
@@ -1164,7 +1198,7 @@ document.getElementById('totalBtn').addEventListener('click', async () => {
     });
     showOut(out, String(total), 'ok');
   } catch (err) {
-    showOut(out, 'Error: ' + (err?.message || String(err)), 'err');
+    showOut(out, 'Error: ' + formatError(err), 'err');
   }
 });
 
