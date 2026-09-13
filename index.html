@@ -314,6 +314,9 @@
   .badge-status-resolved{ background:#1B2E22; color:var(--green); }
   .badge-status-expired{ background:#1D2024; color:var(--slate); }
   .badge-status-cancelled{ background:#1D2024; color:var(--slate); }
+  .badge-status-unreadable{ background:#331D18; color:var(--red); }
+  .explorer-table tr.rowbtn.is-unreadable td{ opacity:.85; }
+  .retry-hint{ font-size:10.5px; color:var(--slate); font-style:italic; }
 
   .badge-cmp-Above{ background:#1B2E22; color:var(--green); }
   .badge-cmp-Below{ background:#331D18; color:var(--red); }
@@ -874,19 +877,23 @@ function assertExecutionSucceeded(receipt){
 function sleep(ms){ return new Promise(resolve => setTimeout(resolve, ms)); }
 
 /**
- * Wraps a read-only contract call with up to 2 retries (short,
- * increasing delay) before giving up. The public Studio RPC endpoint
- * has been observed to occasionally return a generic "Missing or
- * invalid parameters" error under load — this makes every read on
- * the page resilient to that kind of transient failure instead of
- * surfacing it to the user on the first blip.
+ * Wraps a read-only contract call with up to 4 retries (short,
+ * increasing delay, capped) before giving up. The public Studio RPC
+ * endpoint has been observed to occasionally return a generic
+ * "Missing or invalid parameters" error, or simply be slow, under
+ * load — this makes every read on the page resilient to that kind of
+ * transient failure instead of surfacing it to the user on the first
+ * blip. If it still fails after 4 retries, that reflects a genuinely
+ * unavailable RPC rather than an ordinary hiccup, and the caller's
+ * own error handling (e.g. Explorer's "unreadable" row, or the Look
+ * Up screen's error box) takes over from there.
  */
 async function readContractWithRetry(functionName, args, attempt = 0){
   try {
     return await readClient.readContract({ address: CONTRACT_ADDRESS, functionName, args });
   } catch (err) {
-    if (attempt < 2) {
-      await sleep(400 * (attempt + 1));
+    if (attempt < 4) {
+      await sleep(Math.min(600 * (attempt + 1), 2500));
       return readContractWithRetry(functionName, args, attempt + 1);
     }
     throw err;
@@ -1316,8 +1323,8 @@ async function loadExplorer(){
   // was observed to return a generic "Missing or invalid parameters"
   // error under a burst of ~6+ simultaneous read calls. Each
   // individual read also retries transiently via readContractWithRetry.
-  const BATCH = 3;
-  const BATCH_PAUSE_MS = 250;
+  const BATCH = 2;
+  const BATCH_PAUSE_MS = 400;
   let loaded = 0;
 
   for (let start = 0; start < ids.length; start += BATCH) {
@@ -1406,15 +1413,20 @@ function renderExplorerTable(){
   const tbody = makeEl('tbody');
 
   for (const row of rows) {
+    const isUnreadable = row.status === 'unreadable';
     const statusBadge = makeEl('span', { className: 'badge badge-status-' + (row.status || ''), text: row.status || '—' });
     const verdictBadge = row.final_verdict
       ? makeEl('span', { className: 'badge badge-cmp-' + row.final_verdict, text: row.final_verdict })
-      : makeEl('span', { className: 'v', text: '—' });
+      : makeEl('span', { className: 'v', text: isUnreadable ? '' : '—' });
     const winnerText = (row.winner && row.winner !== 'unresolved') ? row.winner : '—';
 
-    const tr = makeEl('tr', { className: 'rowbtn' }, [
+    const statusCell = isUnreadable
+      ? makeEl('td', {}, [statusBadge, makeEl('div', { className: 'retry-hint', text: 'tap row to retry' })])
+      : makeEl('td', {}, [statusBadge]);
+
+    const tr = makeEl('tr', { className: 'rowbtn' + (isUnreadable ? ' is-unreadable' : '') }, [
       makeEl('td', { className: 'num', text: '#' + row.id }),
-      makeEl('td', {}, [statusBadge]),
+      statusCell,
       makeEl('td', { className: 'mono', text: row.currency_pair || '—' }),
       makeEl('td', { className: 'mono', text: row.threshold_rate || '—' }),
       makeEl('td', {}, [verdictBadge]),
