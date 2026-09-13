@@ -1,185 +1,252 @@
-# Cross-Rate Desk — a ForexCrossRateOracle dApp
+# MatchGuard
 
-A two-party, address-bound, deadline-gated, multi-source forex cross-rate settlement Intelligent Contract for GenLayer, plus a minimal no-build-step frontend that talks to it directly. Built from a clean slate for the forex vertical — it borrows only proven structural patterns (the fetch → LLM-extraction → deterministic-comparison pipeline, prompt_comparative validator consensus) from a prior, unrelated GenLayer project, and rebuilds every trust-sensitive control from scratch specifically for two-party FX agreements.
+**Adversarial Sports Event Settlement Intelligent Contract**, built for
+[GenLayer](https://genlayer.com).
 
-**Live contract:** `0x83D722C3E68e1e675882899Ec6b8De508e7EBC54` on GenLayer Studio  
-**Explorer:** https://explorer-studio.genlayer.com/address/0x83D722C3E68e1e675882899Ec6b8De508e7EBC54  
-**Live frontend:** https://123cryp.github.io/forex-oracle-frontend/
+MatchGuard is a two-party settlement contract that doesn't just ask
+*"what was the final score?"* - it settles the full, adversarial STATE
+of a sports event (did it even happen? was it postponed, cancelled,
+abandoned? do sources agree on the result?) and turns that into a
+safe, always-terminal outcome: `party_a_wins`, `party_b_wins`, or
+`refund`. It combines canonical event binding, a locked multi-source
+evidence set, optimistic (challengeable) resolution, an immutable
+versioned history, and deterministic timeout recovery so that a match
+can never get permanently stuck.
+
+MatchGuard is a clean-room design, not a fork of any prior project. It
+reuses only proven, sport-agnostic URL/domain-parsing utilities from a
+sibling GenLayer project, and one specific control - **locking the
+voting source set only after real evidence, never on the literal
+first call** - was rebuilt here from a documented reviewer finding on
+that project (see the class docstring in `contract.py` for the full
+account). Every other trust-sensitive control was designed from
+scratch for adversarial, multi-state event settlement.
 
 ## Repository layout
 
-- `contract.py` — the Intelligent Contract (GenLayer / GenVM, Python)
-- `index.html` — the entire frontend — HTML/CSS/JS, no build step
-- `tests/` — contract.py's offline test suite (129/129 passing)
-- `README.md`
-
-Run tests with:
 ```
-python3 -m unittest discover -s tests -p "test_*.py" -v
-```
-
-(pytest also works with these same files; they're written as plain `unittest.TestCase` classes, which pytest auto-discovers.)
-
-## The three security properties this was built around
-
-The project brief asked for a trust model designed in from day one, not retrofitted. Three properties anchor it:
-
-### 1. Party binding
-`party_a` and `party_b` are never free-text names. `party_a` is always whoever calls `create_agreement` (`gl.message.sender_address`); `party_b` is an on-chain address supplied at creation time, and that *exact* address must itself call `accept_agreement` before the agreement becomes binding (`status` moves from `pending_acceptance` to `open`). Both sides are therefore cryptographically tied to real wallets that actually signed a transaction — never to a string either side could have typed on behalf of someone else.
-
-### 2. Resolution timing / deadline & timestamped rate verification
-Every agreement carries a `resolution_deadline` (an ISO-8601 UTC timestamp) fixed at creation time, at least 5 minutes and at most 365 days out. `resolve_agreement` cannot be called before that deadline (so nobody can race to resolve at a moment that happens to favor one side), and cannot be called after `resolution_deadline + 7 days` (so a stale, forgotten agreement can never be resolved against a rate with no relationship to the agreed moment). Once that window closes unresolved, anyone can permissionlessly call `expire_agreement`.
-
-**Timestamped Rate Verification:** Every source must provide a `TIMESTAMP` (ISO-8601 UTC) alongside its rate. The contract verifies that the timestamp falls within the valid window **relative to the agreed deadline**:
-- Rate timestamp must be >= `resolution_deadline - 24 hours`
-- Rate timestamp must be <= `resolution_deadline`
-
-This ensures settlement is based on rates actually relevant to the agreed moment. A rate with a timestamp outside this window is automatically flagged as `quality_flag: "timestamp_invalid_or_stale"` and excluded from consensus.
-
-The production extraction prompt built by `_build_prompt` (the exact text sent to `gl.nondet.exec_prompt` inside `resolve_agreement`) explicitly requires the model to answer a fifth field, `TIMESTAMP`, in strict ISO-8601 UTC, alongside `PAIR`, `FRESHNESS`, `RATE`, and `COMPARISON` — it is not enough for the validation logic to exist if the model is never asked for a timestamp in the first place. `tests/test_end_to_end.py::ProductionPromptContractEndToEndTests` asserts directly against the real prompt text (not a hand-written mock reply in isolation) that `TIMESTAMP` is requested, then exercises the full pipeline with the exact five-line `PAIR/FRESHNESS/RATE/TIMESTAMP/COMPARISON` output contract to prove two fresh, agreeing sources reach quorum and produce a concrete winner, and that a source which genuinely omits a timestamp is flagged with the same `timestamp_invalid_or_stale` value declared in `QUALITY_FLAGS` and excluded from quorum.
-
-### 3. Mandatory multi-source corroboration with fully locked voting source set
-`required_source_domains` is **not optional** and is **locked at creation** — every agreement must commit at least 2 distinct, reputable, allowlisted FX data domains at creation time. **The voting source set is fully locked:** at resolution time, submitted source URLs must match exactly the committed domains. No additional domains beyond the committed set may participate in voting.
-
-The contract enforces this strict policy: if extra domains are submitted, resolution fails with a clear error. If any required domain is missing, resolution fails. This locks the voting set completely — both parties agreed upfront on exactly who decides the settlement, and no surprise voters can change the outcome.
-
-On top of domain locking, each source's evidence is also checked for **pair/direction match** (a EUR/USD agreement rejects a USD/EUR quote) and **freshness** (stale data is excluded), and the model's self-reported comparison is cross-checked against a comparison computed deterministically in Python — any disagreement excludes that source.
-
-#### Quorum & Dissenting Sources Rule
-- **2 sources (minimum):** Both must agree (both Above, both Below, or both Equal). If they disagree → `Indeterminate`, no winner.
-- **3+ sources:** Majority vote wins. Dissenting (minority) sources are flagged with `is_dissenting: true` in evidence records so both parties can see the breakdown and understand the settlement basis.
-
----
-
-## What this is
-
-A single static page (`index.html`, no build step, no framework) plus the contract it calls. The page is split into four dedicated screens (client-side hash routing — still one file, still zero build step) so each user action gets its own space instead of one long scrolling form:
-
-1. **New agreement** — enter counterparty address, currency pair, threshold rate, comparison direction, description, resolution deadline, and required source domains, and submit `create_agreement`. The caller automatically becomes `party_a`.
-2. **Manage agreement** — the three lifecycle actions for one agreement ID, in order: accept/cancel, resolve, expire.
-   - *Accept or cancel* — the counterparty calls `accept_agreement` to bind themselves as `party_b`; the creator can `cancel_agreement` before acceptance.
-   - *Resolve* — once the deadline arrives, submit 2–6 candidate source URLs and call `resolve_agreement`, which triggers the contract's real fetch → LLM-extraction → deterministic-comparison → validator-consensus pipeline.
-   - *Expire* — permissionlessly clean up a lapsed agreement once its deadline or resolution window has closed.
-3. **Look up** — call `get_agreement` for a full evidence trail plus the final verdict and winner; `get_role` to check whether an address is `party_a`/`party_b`/unrelated; `total_agreements` for the running count.
-4. **Explorer** — a live, filterable table of every agreement this contract instance has ever handled (pending, open, resolved, expired, cancelled), built by reading `total_agreements()` once and then `get_agreement()` for every ID. No wallet needed. Clicking any row jumps straight to that case on the Look Up screen. This is the project's transparency surface — anyone can audit every past decision without needing an indexer or backend.
-
-All actions call the deployed contract directly through [`genlayer-js`](https://github.com/genlayerlabs/genlayer-js) — no backend server. Read calls use an unauthenticated client. Write calls support:
-
-- **MetaMask** — click "connect MetaMask." Requires MetaMask or another injected-provider wallet.
-- **Test session** — click "start test session." Generates a fresh, throwaway keypair in the browser, holds no real value, resets on reload.
-
-Every write button disables itself and shows a busy label for the duration of its transaction, and every transaction receipt is checked for an actual successful execution (not just `FINALIZED` status) before any success message is shown — a rolled-back call (wrong wallet, expired deadline, a locked source set rejecting an extra domain) always surfaces the contract's real error text instead of a false "success."
-
-## DOM-safe frontend
-
-Every dynamic value `index.html` renders — party addresses, descriptions, domains, URLs, quality flags, raw contract JSON, the entire Explorer table — is written using only `document.createElement` and `.textContent`. `innerHTML` is never used anywhere, so nothing returned from the contract or fetched off-chain can ever be interpreted as HTML/script by the page.
-
-## Running it
-
-No build step.
-
-```
-python3 -m http.server 8000
-# then open http://localhost:8000
+matchguard-dapp/
+├── contract.py              # The GenLayer intelligent contract
+├── index.html                # Standalone reference frontend (genlayer-js)
+├── README.md
+├── LICENSE
+└── tests/
+    ├── _bootstrap.py                        # Shared test setup
+    ├── genlayer_stub/genlayer/__init__.py   # Offline SDK stub (test-only)
+    ├── test_party_binding_and_timing.py
+    ├── test_domain_and_content_parsing.py
+    ├── test_aggregation.py
+    └── test_end_to_end.py
 ```
 
-(Opening `index.html` directly via `file://` can fail in some browsers due to ES module restrictions — hence the static server. The live version is hosted on GitHub Pages: https://123cryp.github.io/forex-oracle-frontend/)
+## The eight pillars this was built around
 
-## How it talks to GenLayer
+### 1. Canonical event identity
+A match is never identified by a free-text team name alone.
+`sport`, `competition`, `home_team`, `away_team`, and
+`scheduled_start` are fixed, validated fields at creation time, and
+every piece of fetched evidence must pass an `EVENT_MATCH` check
+confirming it actually covers this exact fixture - not a different
+meeting between the same two teams on a different date, and not a
+different fixture entirely.
 
-```javascript
-import { createClient, createAccount } from "genlayer-js";
-import { studionet } from "genlayer-js/chains";
+### 2. Locked source set, locked only after real evidence
+`locked_source_urls` is set only once a `propose_resolution` (or
+`challenge_resolution`) attempt actually clears the evidence-quality
+bar (`MIN_INDEPENDENT_SOURCES` independent, reputable, on-fixture,
+recognized-status sources) - never on the literal first call. An
+attempt that fails to clear the bar leaves the match `open`, fully
+retryable by anyone with different URLs, right up until the
+resolution window closes. The same staged-locking discipline is
+applied a second time to challenges: a challenge that doesn't move
+the verdict never grows the locked evidence set either.
 
-// Read-only (no wallet needed)
-const readClient = createClient({ chain: studionet });
-const agreement = await readClient.readContract({
-  address: CONTRACT_ADDRESS,
-  functionName: "get_agreement",
-  args: [agreementId],
-});
+### 3. Multi-source semantic consensus over a rich state space
+`_aggregate_verdict` runs a two-stage strict-majority rule:
 
-// Write, via MetaMask
-const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
-const client = createClient({ chain: studionet, account: accounts[0] });
+1. **Status stage** - among eligible sources, the winning STATUS
+   category (`Final` / `Postponed` / `Cancelled` / `Abandoned`) must
+   have at least `MIN_INDEPENDENT_SOURCES` votes and strictly
+   outnumber every other status category. No such category →
+   `Disputed` (sources disagree about the event's status itself).
+2. **Result stage** (only if the status stage resolved to `Final`) -
+   the winning RESULT category (`HomeWin` / `AwayWin` / `Draw`) must
+   equally strictly outnumber the others. No such category →
+   `Disputed` (sources agree the match finished but disagree on the
+   result).
 
-// Write, via a throwaway in-browser test account (no wallet needed)
-const testAccount = createAccount();
-const client2 = createClient({ chain: studionet, account: testAccount });
+Fewer than `MIN_INDEPENDENT_SOURCES` eligible sources at all →
+`Indeterminate`. A lone dissenting source can prevent a false
+majority elsewhere, but can never itself produce a verdict - see
+`tests/test_aggregation.py` for explicit scenarios (a lone dissenter,
+a status-level tie, a result-level tie, a postponed majority, etc).
 
-const txHash = await client.writeContract({
-  address: CONTRACT_ADDRESS,
-  functionName: "create_agreement",
-  args: [partyB, pair, threshold, comparison, description, deadlineIso, requiredDomains],
-});
-await client.waitForTransactionReceipt({ hash: txHash, status: "FINALIZED" });
+### 4. Two-phase (optimistic) resolution
+`propose_resolution` posts a verdict - even a decisive one - as
+**provisional**, opening a `CHALLENGE_WINDOW_SECONDS` window before
+anything is final. This protects against a single early resolver
+being wrong without forcing every routine, undisputed result through
+a slow multi-round dispute process.
+
+### 5. Evidence-based challenge
+`challenge_resolution` cannot register a bare objection. It requires
+a concrete `source_url`, is restricted to the match's two bound
+parties, and only changes anything if re-running the full consensus
+pipeline over the union of the locked evidence and the new source
+actually produces a different verdict. It is bounded to
+`MAX_CHALLENGE_ROUNDS` total attempts per match - a liveness bound,
+not a trust boundary (the very first proposal already goes through
+one full challenge window even when never challenged).
+
+### 6. Result versioning / immutable resolution history
+`resolution_history` is append-only: every proposal, every challenge
+(accepted **or** rejected), and the final finalization are each
+logged as their own timestamped, versioned entry. Nothing already
+appended is ever edited or removed - a later correction is a new
+entry, never a silent rewrite.
+
+### 7. Three-way, always-terminal settlement
+`settlement_outcome` is only ever `party_a_wins`, `party_b_wins`, or
+`refund` once finalized. A Draw, a Postponed/Cancelled/Abandoned
+event, and a Disputed or Indeterminate verdict all deterministically
+map to `refund` - there is no open-ended "unresolved" state for a
+downstream escrow layer to be stuck holding.
+
+### 8. Timeout recovery / source-failure handling - no permanent fund lock
+Every path through the state machine has a permissionless,
+time-bounded exit:
+
+| State | Stuck condition | Recovery |
+|---|---|---|
+| `pending_acceptance` | party_b never accepts | `expire_match` once `scheduled_start` passes → `expired` |
+| `open` | no quality-clearing proposal ever lands | `expire_match` once `resolution_window_closes_at` passes → `expired` |
+| `proposed` | verdict stuck on Disputed/Indeterminate, or simply never challenged | `finalize_match`, permissionless, as soon as `challenge_deadline` passes → `finalized` with a deterministic `settlement_outcome` (always `refund` for non-decisive verdicts) |
+
+A single unreachable, unreputable, off-fixture, or malformed source is
+simply excluded from the eligible set; as long as
+`MIN_INDEPENDENT_SOURCES` *other* sources clear the bar, resolution
+proceeds normally around the failure.
+
+## How resolution works, end to end
+
+```
+create_match (party_a)
+      │
+      ▼
+accept_match (party_b)            [before scheduled_start]
+      │
+      ▼
+      open  ──────────────────────────────────────────────┐
+      │  propose_resolution (anyone, after resolution_     │  resolution_window_closes_at
+      │  deadline, before window closes)                   │  passes with no quality-
+      │                                                     │  clearing proposal
+      ├─ independent_source_count < MIN_INDEPENDENT_SOURCES │
+      │   → stays "open", nothing locked, fully retryable   │
+      │                                                     ▼
+      └─ clears the bar → locks source set, "proposed"   expire_match → expired
+                  │
+                  ▼
+              proposed ⇄ challenge_resolution (party_a/party_b only,
+                  │        before challenge_deadline, ≤ MAX_CHALLENGE_ROUNDS)
+                  │        re-runs full consensus over locked ∪ {new source};
+                  │        verdict changed → accepted, locked set grows,
+                  │        version++, deadline resets; unchanged → rejected,
+                  │        nothing grows, round consumed either way
+                  │
+                  ▼  challenge_deadline passes
+            finalize_match (permissionless)
+                  │
+                  ▼
+              finalized: final_verdict + settlement_outcome frozen forever
 ```
 
-This page loads `genlayer-js` from a CDN, so it needs no npm install or bundler.
+## Comparison with a score-only oracle
 
-## Testing
+| | Score-only oracle | MatchGuard |
+|---|---|---|
+| Settles | Final score vs. a threshold | Full event state (Final/Postponed/Cancelled/Abandoned/Disputed/Indeterminate) |
+| Evidence | Multi-source | Multi-source, canonical-event-bound |
+| Party binding | Address-bound | Address-bound + canonical event binding |
+| Resolution timing | One deadline + window | Proposal window + independent challenge window |
+| Consensus | Single-pass majority | Two-stage strict majority (status, then result) |
+| Result record | Final value | Versioned, immutable, append-only history |
+| Settlement | Win / Lose | Win / Lose / Refund - always terminal |
+| Source validation | Domain allowlist | Domain allowlist + canonical event identity |
+| Dispute handling | — | Evidence-based challenge mechanism |
+| Stuck-fund protection | Expiry window | Expiry window **and** permissionless finalize on every proposed match |
 
-### Offline unit/integration tests (129/129 passing)
+## v1 scope
 
+- Settlement market is a straight moneyline on `side_a` ("home" or
+  "away") plus a built-in Draw outcome that always refunds.
+  Handicap/spread markets are out of v1 scope, for the same reason a
+  sibling project excluded margin-of-victory markets: folding a
+  second settlement metric into one prompt/parsing pipeline doubles
+  the surface area for subtle validator disagreement in a first
+  version.
+- This contract produces an authoritative, auditable, **versioned**
+  settlement decision. It does not itself move funds - actual value
+  transfer is intentionally left to a separate escrow/payout layer
+  that consumes `get_match`'s `settlement_outcome`.
+- `REPUTABLE_SPORTS_DOMAINS` is a bare-registrable-domain allowlist;
+  a specific section of a domain can still be pinned down via the
+  optional `domain/path` form in `required_source_domains` (see
+  `_parse_endpoint_requirement`).
+
+## Frontend
+
+`index.html` is a single-file, dependency-free (besides
+`genlayer-js` from a CDN) reference frontend: create a match, accept
+it as party_b, propose a resolution, challenge it, finalize it, or
+read any match's full state and resolution history. Every dynamic
+value is rendered via `textContent`/`createElement`, never
+`innerHTML`, so nothing in contract storage can ever be interpreted
+as markup. Set `CONTRACT_ADDRESS` near the top of the `<script>` block
+to your deployed instance before using it.
+
+## Test suite
+
+Offline, fully deterministic unit + integration tests using a minimal
+stub of the `genlayer` SDK (`tests/genlayer_stub/`) - no real network,
+LLM, or multi-validator consensus involved; those are exercised
+against the live GenLayer Studio/testnet separately.
+
+```bash
+pip install pytest
+cd matchguard-dapp
+pytest tests/ -v
 ```
-tests/
-├── _bootstrap.py                          shared contract loader + offline SDK stub
-├── genlayer_stub/genlayer/__init__.py     minimal offline stand-in for the genlayer SDK
-├── test_domain_and_rate_parsing.py        35 tests — domain/path/rate/timestamp parsing
-├── test_aggregation.py                    11 tests — multi-source verdict aggregation
-├── test_party_binding_and_timing.py       38 tests — party binding, state machine, deadlines
-├── test_quorum_and_dissenting.py          15 tests — quorum scenarios and dissenting source tracking
-├── test_timestamp_verification.py         10 tests — timestamped rate validation
-└── test_end_to_end.py                     20 tests — full resolve pipeline (17 base + 3 production-prompt-contract regression tests, incl. the exact 5-field PAIR/FRESHNESS/RATE/TIMESTAMP/COMPARISON output the real prompt requires)
-```
 
-Run with:
-```
-python3 -m unittest discover -s tests -p "test_*.py" -v
-```
+Coverage includes: party binding and every timing boundary; canonical
+event identity and required-domain coverage checks; URL/domain
+parsing and content classification; the two-stage aggregation logic
+(lone dissenters, status-level ties, result-level ties, postponed/
+cancelled majorities); the full propose → challenge → finalize
+lifecycle (including a challenge that resolves an initially Disputed
+proposal into a clear verdict, and a second challenge that reopens it
+into Disputed again); the `MAX_CHALLENGE_ROUNDS` liveness bound; and
+every timeout-recovery path (never-proposed expiry, and an
+Indeterminate proposal that still finalizes safely to `refund`).
 
-The `genlayer_stub` reproduces just enough of the real GenLayer SDK (gl.Contract, gl.public, gl.vm.UserError, gl.message.sender_address, TreeMap/u256/Address) to import and exercise contract.py's deterministic logic in plain Python, with `gl.nondet.web.render` / `gl.nondet.exec_prompt` mocked per test case. It does not simulate real network access, real LLM behavior, or actual multi-validator consensus — those require the live GenLayer Studio.
+## Deploying
 
-### Live end-to-end tests on GenLayer Studio
+Deploy `contract.py` through GenLayer Studio or the GenLayer CLI to a
+GenLayer network exactly as any other `gl.Contract`. No constructor
+arguments are required (`__init__` only zeroes the match counter).
+After deployment, update `CONTRACT_ADDRESS` in `index.html` to point
+at it.
 
-Every method was exercised against the real, deployed contract on GenLayer Studio, with real validator consensus, confirming offline test assumptions hold on the actual network:
+## Known limitations (disclosed, not hidden)
 
-| Test | Result |
-|---|---|
-| Deploy | ✅ FINALIZED |
-| create_agreement (valid inputs) | ✅ agreement created |
-| accept_agreement by party_a (should reject) | ✅ rejected — "Only the address designated as party_b..." |
-| accept_agreement by party_b | ✅ status → open |
-| resolve_agreement before deadline (should reject) | ✅ rejected — "...has not been reached yet" |
-| resolve_agreement after deadline, valid sources | ✅ status → resolved, correct winner |
-| resolve_agreement with extra sources beyond committed set | ✅ rejected — "voting source set is locked" |
-| cancel_agreement by party_a before acceptance | ✅ status → cancelled |
-| expire_agreement before deadline (should reject) | ✅ rejected |
-| expire_agreement after deadline, never accepted | ✅ status → expired |
-| Frontend: connect via test session, create agreement | ✅ tx finalized (agreement ID 5), confirmed on v1.3.0 |
-| Frontend: get_agreement read + DOM-safe render | ✅ rendered correctly — full JSON + fields verified on v1.3.0 |
-| Frontend: get_role, total_agreements | ✅ get_role returned "party_b" correctly; total_agreements returned accurate count, verified on v1.3.0 |
-| Frontend: rollback vs success detection | ✅ a wrong-wallet accept_agreement call correctly surfaces the real rollback error instead of a false "Accepted.", verified on v1.4.1 |
-| Frontend: Explorer loads and renders every agreement | ✅ live-verified on v1.5.4 — all 7 agreements loaded with correct status/pair/threshold/verdict/deadline in the table |
-| Frontend: Explorer status filters | ✅ live-verified — Pending (5), Open (2), and empty-filter states (Resolved/Expired/Cancelled all showing "No cases match this filter") all rendered correctly |
-| Frontend: Explorer empty state | ✅ shows a "No agreements yet" state with a link into New Agreement when total_agreements() is 0 |
-| Frontend: Explorer row click → Look Up | ✅ live-verified on v1.5.4 — clicking a resolved-status row and a pending-status row both switch view and correctly fetch/render that exact agreement's full JSON |
-| Frontend: static analysis (v1.5.0+) | ✅ every `getElementById` target confirmed present, every button confirmed wired to a listener, JS validated with `node --check`, HTML tag balance validated with a parser |
-
-#### Real bugs found and fixed during this live testing pass (not just static analysis)
-- **Type coercion bug (v1.5.3/v1.5.4):** `get_agreement(agreement_id: str)` requires a string argument, but the Explorer's ID loop (`Array.from({length}, (_, i) => i)`) generated plain JS numbers, and the row-click handler forwarded that raw number too. Every Explorer read failed deterministically with a generic RPC "Missing or invalid parameters" error — indistinguishable at first glance from a transient network issue. Fixed by coercing to `String(id)` at both call sites, plus a defensive coercion inside `fetchAgreement` itself so no future caller can reintroduce it.
-- **Resilience improvement (v1.5.2):** added a `readContractWithRetry` wrapper (used by every read call on the page) and reduced Explorer's fetch concurrency from 6 simultaneous requests to batches of 3 with a short pause between batches, since a burst of concurrent reads was one of the two contributing factors behind the intermittent read failures above.
-- **Richer error surfacing (v1.5.1):** replaced bare `err.message` display with a `formatError()` helper that unwraps viem/genlayer-js's `shortMessage`, `details`, `metaMessages`, and chained `.cause` errors — this is what made the type-coercion bug diagnosable from the page itself instead of requiring browser devtools.
-
-Not exercised live from the frontend UI: a same-browser, two-tab accept_agreement/cancel_agreement round trip. Mobile browsers routinely reclaim memory from backgrounded tabs by reloading them, and since a "test session" wallet lives only in that page load's JavaScript memory, a background reload silently discards it — this is a mobile browser memory-management behavior, not a defect in the contract or frontend. The underlying logic was already confirmed both on live GenLayer Studio (table above) and in the offline suite.
-
-## Known limitations (disclosed intentionally, not hidden)
-
-- **No fund movement.** This contract produces a settlement decision — it does not hold or transfer value. Wiring a winner payout up to an actual escrow is left to a separate layer.
-- **RATE_EPSILON is one fixed tolerance for every pair** (0.0001, roughly one pip for most non-JPY pairs). JPY crosses are conventionally quoted to 2 decimal places, so this tolerance is tighter than their usual quoting precision — deliberately conservative (it will rarely call a genuinely different rate "Equal"), not a bug.
-- **No backend, database, or indexer.** Every read comes straight from `get_agreement` on-chain; there is no caching layer.
-- **No private key management.** The frontend only requests `eth_requestAccounts` from injected providers, or generates a throwaway `genlayer-js` test account — it never stores or transmits a private key.
-
-## License
-
-MIT — see LICENSE.
+- `MAX_CHALLENGE_ROUNDS` bounds worst-case dispute latency at a small,
+  fixed number of rounds; a truly protracted real-world dispute
+  (conflicting official corrections issued days apart, for example)
+  is out of scope for v1's single-match challenge window.
+- A challenge can only add ONE new source per call; flipping a
+  verdict that needs several additional corroborating sources at once
+  requires several successive challenge calls, still bounded by
+  `MAX_CHALLENGE_ROUNDS`.
+- As in the sibling project, `REPUTABLE_SPORTS_DOMAINS` and
+  `KNOWN_MULTI_PART_SUFFIXES` are maintained on-chain constants, not a
+  live registry - adding a new reputable domain requires a contract
+  upgrade.
